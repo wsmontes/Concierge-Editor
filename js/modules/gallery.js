@@ -126,16 +126,17 @@ const GalleryModule = (function() {
                     const restaurant = restaurants.find(r => r.id === photo.restaurantId);
                     const restaurantName = restaurant ? restaurant.name : 'Unknown Restaurant';
                     
-                    // Get image URL from storage
-                    const imageUrl = await StorageModule.getImageURL(photo.id.toString());
+                    // Get image URL from storage with fallback
+                    const imageUrl = await StorageModule.getImageURL(photo.id.toString(), true);
                     
+                    // Create gallery item even if image URL is null
+                    const galleryItem = document.createElement('div');
+                    galleryItem.className = 'gallery-item';
+                    galleryItem.dataset.id = photo.id;
+                    galleryItem.dataset.restaurantId = photo.restaurantId;
+                    
+                    // Add appropriate content based on whether image loaded
                     if (imageUrl) {
-                        // Create gallery item
-                        const galleryItem = document.createElement('div');
-                        galleryItem.className = 'gallery-item';
-                        galleryItem.dataset.id = photo.id;
-                        galleryItem.dataset.restaurantId = photo.restaurantId;
-                        
                         galleryItem.innerHTML = `
                             <div class="gallery-item-image">
                                 <img src="${imageUrl}" alt="${restaurantName} photo">
@@ -149,32 +150,54 @@ const GalleryModule = (function() {
                                 <button class="btn btn-icon" title="Delete"><i class="fas fa-trash"></i></button>
                             </div>
                         `;
-                        
-                        // Add click handler for view button
+                    } else {
+                        // Display placeholder with error indicator
+                        galleryItem.innerHTML = `
+                            <div class="gallery-item-image placeholder">
+                                <div class="placeholder-icon"><i class="fas fa-image"></i></div>
+                                <div class="error-badge" title="Image data not found"><i class="fas fa-exclamation-triangle"></i></div>
+                            </div>
+                            <div class="gallery-item-info">
+                                <h4>${restaurantName}</h4>
+                                <p>Photo ID: ${photo.id} (Data Missing)</p>
+                            </div>
+                            <div class="gallery-item-actions">
+                                <button class="btn btn-icon btn-disabled" disabled title="View"><i class="fas fa-eye"></i></button>
+                                <button class="btn btn-icon" title="Delete"><i class="fas fa-trash"></i></button>
+                            </div>
+                        `;
+                    }
+                    
+                    // Add click handler for view button if image exists
+                    if (imageUrl) {
                         const viewButton = galleryItem.querySelector('.btn-icon[title="View"]');
                         if (viewButton) {
                             viewButton.addEventListener('click', function() {
                                 viewImage(photo.id, imageUrl, restaurantName);
                             });
                         }
-                        
-                        // Add click handler for delete button
-                        const deleteButton = galleryItem.querySelector('.btn-icon[title="Delete"]');
-                        if (deleteButton) {
-                            deleteButton.addEventListener('click', function() {
-                                if (confirm(`Delete this image from ${restaurantName}?`)) {
+                    }
+                    
+                    // Add click handler for delete button
+                    const deleteButton = galleryItem.querySelector('.btn-icon[title="Delete"]');
+                    if (deleteButton) {
+                        deleteButton.addEventListener('click', function() {
+                            UIModule.showConfirmDialog({
+                                title: 'Delete Image',
+                                message: `Delete this image from ${restaurantName}?`,
+                                onConfirm: () => {
                                     deleteImage(photo.id, photo.restaurantId);
                                 }
                             });
-                        }
-                        
-                        galleryGrid.appendChild(galleryItem);
+                        });
                     }
+                    
+                    galleryGrid.appendChild(galleryItem);
                 } catch (error) {
                     console.error(`Error loading image ${photo.id}:`, error);
+                    // Continue with other images despite errors
                 }
             }
-            
         } catch (error) {
             console.error('Error loading gallery images:', error);
             galleryGrid.innerHTML = '<div class="error-state">Error loading images</div>';

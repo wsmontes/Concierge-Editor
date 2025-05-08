@@ -539,18 +539,32 @@ const StorageModule = (function() {
     /**
      * Get a URL for an image that can be used in img src
      * @param {string} id - ID of the image
-     * @return {Promise<string>} - Promise that resolves with the image URL
+     * @param {boolean} useFallback - Whether to use fallback image when not found
+     * @return {Promise<string|null>} - Promise that resolves with the image URL or null
      */
-    async function getImageURL(id) {
+    async function getImageURL(id, useFallback = true) {
         try {
             const image = await getImage(id);
             if (image && image.blob) {
                 return URL.createObjectURL(image.blob);
             }
-            throw new Error('Image data not found');
-        } catch (error) {
-            console.error(`Error getting URL for image ${id}:`, error);
+            
+            // Instead of throwing, check if we should use fallback
+            if (useFallback) {
+                // Try to get image reference from localStorage as fallback
+                const photos = JSON.parse(localStorage.getItem('restaurantPhotos') || '[]');
+                const photoData = photos.find(p => p.id.toString() === id.toString());
+                
+                if (photoData && photoData.photoDataRef) {
+                    // If we have a reference, return a placeholder based on category
+                    return `/assets/placeholders/restaurant-default.jpg`;
+                }
+                return `/assets/placeholders/image-placeholder.jpg`;
+            }
             return null;
+        } catch (error) {
+            console.warn(`Unable to load image ${id}:`, error);
+            return useFallback ? `/assets/placeholders/image-placeholder.jpg` : null;
         }
     }
     
