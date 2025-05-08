@@ -27,6 +27,17 @@
     to { opacity: 1; transform: translateY(0); }
 }
 
+/* Enhance hover effects on cards to match Collector reference */
+.restaurant-card {
+    transition: all var(--transition-smooth);
+}
+
+.restaurant-card:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--shadow-md);
+    border-color: var(--neutral-200);
+}
+
 .panel-header {
     display: flex;
     justify-content: space-between;

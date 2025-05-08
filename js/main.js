@@ -11,8 +11,14 @@ document.addEventListener('DOMContentLoaded', function() {
     FormControlsModule.init();
     
     // Initialize storage first to ensure database is ready
-    StorageModule.initDatabase().then(() => {
+    StorageModule.initDatabase().then(async () => {
         console.log('Storage initialized');
+        
+        // Migrate data from localStorage if needed
+        const migrationResult = await DataModule.migrateFromLocalStorage();
+        if (migrationResult.migrated) {
+            console.log('Data migrated from localStorage to IndexedDB');
+        }
         
         // Initialize feature modules
         DashboardModule.init();

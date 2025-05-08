@@ -1268,28 +1268,11 @@ const RestaurantModule = (function() {
         if (!Array.isArray(restaurantIds) || restaurantIds.length === 0) return;
         
         try {
-            // Delete restaurant images from storage
-            await StorageModule.deleteRestaurantImages(restaurantIds);
+            // Use StorageModule to delete restaurants and related data
+            await StorageModule.deleteRestaurants(restaurantIds);
             
-            // Delete from restaurants
-            let restaurants = JSON.parse(localStorage.getItem('restaurants') || '[]');
-            restaurants = restaurants.filter(r => !restaurantIds.includes(r.id));
-            localStorage.setItem('restaurants', JSON.stringify(restaurants));
-            
-            // Delete related restaurant concepts
-            let restaurantConcepts = JSON.parse(localStorage.getItem('restaurantConcepts') || '[]');
-            restaurantConcepts = restaurantConcepts.filter(rc => !restaurantIds.includes(rc.restaurantId));
-            localStorage.setItem('restaurantConcepts', JSON.stringify(restaurantConcepts));
-            
-            // Delete related locations
-            let locations = JSON.parse(localStorage.getItem('restaurantLocations') || '[]');
-            locations = locations.filter(l => !restaurantIds.includes(l.restaurantId));
-            localStorage.setItem('restaurantLocations', JSON.stringify(locations));
-            
-            // Delete related photo references
-            let photos = JSON.parse(localStorage.getItem('restaurantPhotos') || '[]');
-            photos = photos.filter(p => !restaurantIds.includes(p.restaurantId));
-            localStorage.setItem('restaurantPhotos', JSON.stringify(photos));
+            // Show success message
+            UIModule.showToast('Restaurants deleted successfully', 'success');
         } catch (error) {
             console.error('Error deleting restaurants:', error);
             UIModule.showToast('Error deleting restaurant data', 'error');
