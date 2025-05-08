@@ -1,6 +1,6 @@
 /**
  * Search Module - Handles searching and filtering of restaurant data
- * Dependencies: RestaurantModule for displaying results, UIModule for notifications
+ * Dependencies: RestaurantModule for displaying results, UIModule for notifications, NavigationModule for page transitions
  */
 
 const SearchModule = (function() {
@@ -13,6 +13,15 @@ const SearchModule = (function() {
      * Initialize search functionality
      */
     function init() {
+        initGlobalSearch();
+        initAdvancedSearch();
+        initQuickFilters();
+    }
+    
+    /**
+     * Initialize global search functionality
+     */
+    function initGlobalSearch() {
         const globalSearchForm = document.getElementById('global-search');
         
         if (globalSearchForm) {
@@ -24,6 +33,129 @@ const SearchModule = (function() {
                     // Perform simple text search
                     applySimpleSearch(searchInput.value.trim());
                 }
+            });
+        }
+    }
+    
+    /**
+     * Initialize advanced search functionality
+     */
+    function initAdvancedSearch() {
+        const advancedSearchForm = document.getElementById('advanced-search-form');
+        const resetSearchBtn = document.getElementById('reset-search');
+        
+        if (advancedSearchForm) {
+            advancedSearchForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                
+                // Collect search criteria
+                const searchCriteria = {
+                    text: document.getElementById('search-name')?.value || '',
+                    curatorId: document.getElementById('search-curator')?.value || '',
+                    conceptId: document.getElementById('search-concept')?.value || '',
+                    dateFrom: document.getElementById('search-date-from')?.value || '',
+                    dateTo: document.getElementById('search-date-to')?.value || '',
+                    statuses: Array.from(document.querySelectorAll('input[name="status"]:checked'))
+                        .map(el => el.value),
+                    hasDescription: document.querySelector('input[name="has_description"]')?.checked || false,
+                    hasTranscription: document.querySelector('input[name="has_transcription"]')?.checked || false,
+                    hasImages: document.querySelector('input[name="has_images"]')?.checked || false,
+                    hasLocation: document.querySelector('input[name="has_location"]')?.checked || false
+                };
+                
+                // Apply advanced search
+                applyAdvancedSearch(searchCriteria);
+                
+                // Close the panel
+                document.getElementById('advanced-search-panel')?.classList.remove('active');
+            });
+        }
+        
+        if (resetSearchBtn) {
+            resetSearchBtn.addEventListener('click', function() {
+                resetSearch();
+            });
+        }
+        
+        // Toggle advanced search panel
+        const advancedSearchBtn = document.getElementById('advanced-search-btn');
+        const closeAdvancedSearch = document.querySelector('.close-advanced-search');
+        
+        if (advancedSearchBtn) {
+            advancedSearchBtn.addEventListener('click', function() {
+                document.getElementById('advanced-search-panel')?.classList.toggle('active');
+            });
+        }
+        
+        if (closeAdvancedSearch) {
+            closeAdvancedSearch.addEventListener('click', function() {
+                document.getElementById('advanced-search-panel')?.classList.remove('active');
+            });
+        }
+    }
+    
+    /**
+     * Initialize quick filter functionality
+     */
+    function initQuickFilters() {
+        // Filter by status
+        const statusFilter = document.getElementById('status-filter');
+        if (statusFilter) {
+            statusFilter.addEventListener('change', function() {
+                const status = this.value;
+                if (status !== 'all') {
+                    filterByStatus(status);
+                } else {
+                    // Show all statuses
+                    currentSearchCriteria = {
+                        statuses: ['draft', 'revised', 'production', 'archived']
+                    };
+                    filterRestaurants();
+                    UIModule.showToast('Showing all restaurants', 'info');
+                }
+            });
+        }
+        
+        // Filter by restaurant type
+        const restaurantFilter = document.getElementById('filter-restaurants');
+        if (restaurantFilter) {
+            restaurantFilter.addEventListener('change', function() {
+                const filterValue = this.value;
+                
+                // Update current search criteria
+                if (filterValue === 'no-concepts') {
+                    currentSearchCriteria.noConcepts = true;
+                } else if (filterValue === 'new') {
+                    const oneWeekAgo = new Date();
+                    oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+                    currentSearchCriteria.dateFrom = oneWeekAgo.toISOString().split('T')[0];
+                } else {
+                    // Reset these specific filters
+                    delete currentSearchCriteria.noConcepts;
+                    delete currentSearchCriteria.dateFrom;
+                }
+                
+                // Update display
+                filterRestaurants();
+                
+                // Notify user
+                if (filterValue !== 'all') {
+                    const filterLabel = this.options[this.selectedIndex].text;
+                    UIModule.showToast(`Filter applied: ${filterLabel}`, 'info');
+                }
+            });
+        }
+        
+        // Restaurant sort
+        const sortSelect = document.getElementById('sort-restaurants');
+        if (sortSelect) {
+            sortSelect.addEventListener('change', function() {
+                // Sorting is handled directly in RestaurantModule
+                const sortLabel = this.options[this.selectedIndex].text;
+                UIModule.showToast(`Sorted by: ${sortLabel}`, 'info');
+                
+                // Trigger filter to update restaurant display
+                filterRestaurants();
             });
         }
     }
@@ -64,6 +196,9 @@ const SearchModule = (function() {
         
         // Filter restaurants
         filterRestaurants();
+        
+        // Update UI
+        UIModule.showToast('Advanced search applied', 'success');
     }
     
     /**
@@ -96,7 +231,12 @@ const SearchModule = (function() {
      * @param {string} status - The status to filter by
      */
     function filterByStatus(status) {
-        // Clear other search criteria and only filter by status
+        if (!status) return;
+        
+        // Navigate to restaurants section
+        NavigationModule.navigateTo('restaurants');
+        
+        // Store search criteria
         currentSearchCriteria = {
             statuses: [status]
         };
@@ -104,8 +244,15 @@ const SearchModule = (function() {
         // Filter restaurants
         filterRestaurants();
         
-        // Update UI
-        UIModule.showToast(`Showing ${status} restaurants`, 'info');
+        // Update UI with status filter information
+        const statusCapitalized = status.charAt(0).toUpperCase() + status.slice(1);
+        UIModule.showToast(`Showing ${statusCapitalized} restaurants`, 'info');
+        
+        // Update status filter dropdown if it exists
+        const statusFilter = document.getElementById('status-filter');
+        if (statusFilter) {
+            statusFilter.value = status;
+        }
     }
     
     /**
@@ -147,6 +294,17 @@ const SearchModule = (function() {
             
             restaurants = restaurants.filter(restaurant => {
                 return restaurantIds.includes(restaurant.id);
+            });
+        }
+        
+        // Apply "no concepts" filter if specified
+        if (currentSearchCriteria.noConcepts) {
+            const restaurantsWithConcepts = new Set(
+                restaurantConcepts.map(rc => rc.restaurantId)
+            );
+            
+            restaurants = restaurants.filter(restaurant => {
+                return !restaurantsWithConcepts.has(restaurant.id);
             });
         }
         
@@ -225,11 +383,13 @@ const SearchModule = (function() {
             countElement.textContent = `${restaurants.length} restaurant${restaurants.length !== 1 ? 's' : ''}`;
         }
         
-        // Update restaurant listings
+        // Update restaurant listings via RestaurantModule
         if (typeof RestaurantModule.displayFilteredRestaurants === 'function') {
             RestaurantModule.displayFilteredRestaurants(restaurants);
+        } else if (typeof RestaurantModule.updateRestaurantListings === 'function') {
+            RestaurantModule.updateRestaurantListings(currentSearchCriteria);
         } else {
-            console.warn('RestaurantModule.displayFilteredRestaurants is not available');
+            console.warn('RestaurantModule display method is not available');
         }
     }
     
@@ -249,11 +409,183 @@ const SearchModule = (function() {
         const advancedSearchForm = document.getElementById('advanced-search-form');
         if (advancedSearchForm) advancedSearchForm.reset();
         
+        // Reset filter dropdowns
+        const filterSelect = document.getElementById('filter-restaurants');
+        if (filterSelect) filterSelect.value = 'all';
+        
+        const statusFilter = document.getElementById('status-filter');
+        if (statusFilter) statusFilter.value = 'all';
+        
         // Show all restaurants
         filterRestaurants();
         
         // Update UI
         UIModule.showToast('Search filters cleared', 'info');
+    }
+    
+    /**
+     * Get selected filter options for UI display
+     * @return {Array} Array of active filters for display
+     */
+    function getActiveFilters() {
+        const filters = [];
+        
+        if (currentSearchCriteria.text) {
+            filters.push({ type: 'text', value: currentSearchCriteria.text });
+        }
+        
+        if (currentSearchCriteria.conceptId) {
+            // Get concept name
+            const concepts = JSON.parse(localStorage.getItem('concepts') || '[]');
+            const concept = concepts.find(c => c.id === parseInt(currentSearchCriteria.conceptId));
+            if (concept) {
+                filters.push({ type: 'concept', value: concept.value });
+            }
+        }
+        
+        if (currentSearchCriteria.statuses && currentSearchCriteria.statuses.length > 0 &&
+            currentSearchCriteria.statuses.length < 4) { // Not showing if all statuses selected
+            filters.push({ type: 'status', value: currentSearchCriteria.statuses.join(', ') });
+        }
+        
+        if (currentSearchCriteria.dateFrom && currentSearchCriteria.dateTo) {
+            filters.push({ 
+                type: 'dateRange', 
+                value: `${formatDate(new Date(currentSearchCriteria.dateFrom))} to ${formatDate(new Date(currentSearchCriteria.dateTo))}`
+            });
+        } else if (currentSearchCriteria.dateFrom) {
+            filters.push({ 
+                type: 'dateFrom', 
+                value: `After ${formatDate(new Date(currentSearchCriteria.dateFrom))}`
+            });
+        } else if (currentSearchCriteria.dateTo) {
+            filters.push({ 
+                type: 'dateTo', 
+                value: `Before ${formatDate(new Date(currentSearchCriteria.dateTo))}`
+            });
+        }
+        
+        if (currentSearchCriteria.noConcepts) {
+            filters.push({ type: 'noConcepts', value: 'No Concepts' });
+        }
+        
+        // Additional content filters
+        const contentFilters = [];
+        if (currentSearchCriteria.hasDescription) contentFilters.push('Description');
+        if (currentSearchCriteria.hasTranscription) contentFilters.push('Transcription');
+        if (currentSearchCriteria.hasImages) contentFilters.push('Images');
+        if (currentSearchCriteria.hasLocation) contentFilters.push('Location');
+        
+        if (contentFilters.length > 0) {
+            filters.push({ type: 'content', value: `Has: ${contentFilters.join(', ')}` });
+        }
+        
+        return filters;
+    }
+    
+    /**
+     * Format a date for display in UI
+     * @param {Date} date - The date to format
+     * @return {string} - Formatted date string
+     */
+    function formatDate(date) {
+        return `${date.getMonth() + 1}/${date.getDate()}/${date.getFullYear()}`;
+    }
+    
+    /**
+     * Render active filter badges in UI
+     * @param {HTMLElement} container - The container to render filters into
+     */
+    function renderActiveFilters(container) {
+        if (!container) return;
+        
+        const filters = getActiveFilters();
+        container.innerHTML = '';
+        
+        if (filters.length === 0) {
+            container.style.display = 'none';
+            return;
+        }
+        
+        container.style.display = 'flex';
+        
+        filters.forEach(filter => {
+            const badge = document.createElement('div');
+            badge.className = 'filter-badge';
+            badge.innerHTML = `
+                <span class="filter-text">${filter.value}</span>
+                <button class="filter-remove" data-type="${filter.type}">
+                    <i class="material-icons">close</i>
+                </button>
+            `;
+            
+            const removeBtn = badge.querySelector('.filter-remove');
+            if (removeBtn) {
+                removeBtn.addEventListener('click', () => {
+                    removeFilter(filter.type);
+                });
+            }
+            
+            container.appendChild(badge);
+        });
+        
+        // Add clear all button if there are filters
+        if (filters.length > 0) {
+            const clearButton = document.createElement('button');
+            clearButton.className = 'filter-clear-all';
+            clearButton.innerHTML = 'Clear All';
+            clearButton.addEventListener('click', resetSearch);
+            container.appendChild(clearButton);
+        }
+    }
+    
+    /**
+     * Remove a specific filter
+     * @param {string} filterType - The type of filter to remove
+     */
+    function removeFilter(filterType) {
+        switch (filterType) {
+            case 'text':
+                delete currentSearchCriteria.text;
+                const searchInput = document.querySelector('#global-search input');
+                if (searchInput) searchInput.value = '';
+                break;
+                
+            case 'concept':
+                delete currentSearchCriteria.conceptId;
+                break;
+                
+            case 'status':
+                currentSearchCriteria.statuses = ['draft', 'revised', 'production', 'archived'];
+                const statusFilter = document.getElementById('status-filter');
+                if (statusFilter) statusFilter.value = 'all';
+                break;
+                
+            case 'dateRange':
+            case 'dateFrom':
+            case 'dateTo':
+                delete currentSearchCriteria.dateFrom;
+                delete currentSearchCriteria.dateTo;
+                break;
+                
+            case 'noConcepts':
+                delete currentSearchCriteria.noConcepts;
+                const filterSelect = document.getElementById('filter-restaurants');
+                if (filterSelect) filterSelect.value = 'all';
+                break;
+                
+            case 'content':
+                // Remove all content filters
+                delete currentSearchCriteria.hasDescription;
+                delete currentSearchCriteria.hasTranscription;
+                delete currentSearchCriteria.hasImages;
+                delete currentSearchCriteria.hasLocation;
+                break;
+        }
+        
+        // Apply updated filters
+        filterRestaurants();
+        UIModule.showToast('Filter removed', 'info');
     }
     
     // Public API
@@ -263,6 +595,9 @@ const SearchModule = (function() {
         applyAdvancedSearch: applyAdvancedSearch,
         filterByConcept: filterByConcept,
         filterByStatus: filterByStatus,
-        resetSearch: resetSearch
+        resetSearch: resetSearch,
+        renderActiveFilters: renderActiveFilters,
+        getActiveFilters: getActiveFilters,
+        filterRestaurants: filterRestaurants
     };
 })();

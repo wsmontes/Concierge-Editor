@@ -11,14 +11,26 @@ const RestaurantModule = (function() {
         PRODUCTION: 'production',
         ARCHIVED: 'archived'
     };
+    
+    // Pagination state
+    let currentPage = 1;
+    let itemsPerPage = 12; // Default items per page
+    let totalItems = 0;
+    let totalPages = 0;
 
     /**
      * Initialize restaurant functionality
      */
     function init() {
         initRestaurantListings();
-        
-        // Add event delegation for the view modes
+        initViewModes();
+        initPagination();
+    }
+    
+    /**
+     * Initialize view mode toggles
+     */
+    function initViewModes() {
         const viewButtons = document.querySelectorAll('.view-toggle-btn');
         if (viewButtons && viewButtons.length >= 3) {
             const listContainer = document.getElementById('restaurant-list');
@@ -39,10 +51,116 @@ const RestaurantModule = (function() {
             });
             
             // Set the default view mode or restore from preference
-            const savedViewMode = localStorage.getItem('restaurantViewMode') || 'list';
+            const savedViewMode = localStorage.getItem('restaurantViewMode') || 'grid';
             const buttonIndex = savedViewMode === 'grid' ? 0 : (savedViewMode === 'list' ? 1 : 2);
             viewButtons[buttonIndex].click();
         }
+    }
+    
+    /**
+     * Initialize pagination controls
+     */
+    function initPagination() {
+        // Initialize items per page from localStorage or use default
+        itemsPerPage = parseInt(localStorage.getItem('restaurantItemsPerPage')) || 12;
+        
+        // Set up pagination controls event listeners
+        document.addEventListener('click', function(event) {
+            if (event.target.classList.contains('pagination-link')) {
+                event.preventDefault();
+                const page = parseInt(event.target.dataset.page);
+                if (!isNaN(page)) {
+                    goToPage(page);
+                }
+            }
+        });
+    }
+
+    /**
+     * Navigate to a specific page
+     * @param {number} page - The page number to navigate to
+     */
+    function goToPage(page) {
+        if (page < 1 || page > totalPages) return;
+        
+        currentPage = page;
+        updateRestaurantListings();
+        
+        // Scroll to top of listings
+        const listContainer = document.getElementById('restaurant-list');
+        if (listContainer) {
+            listContainer.scrollIntoView({ behavior: 'smooth' });
+        }
+    }
+
+    /**
+     * Generate pagination controls
+     * @param {number} currentPage - Current active page
+     * @param {number} totalPages - Total number of pages
+     * @returns {string} - HTML for pagination controls
+     */
+    function generatePaginationControls(currentPage, totalPages) {
+        if (totalPages <= 1) return '';
+        
+        let html = '<div class="pagination-controls">';
+        
+        // Previous button
+        html += `<button class="pagination-link ${currentPage === 1 ? 'disabled' : ''}" 
+                    data-page="${currentPage - 1}" ${currentPage === 1 ? 'disabled' : ''}>
+                    <i class="fas fa-chevron-left"></i> Previous
+                </button>`;
+        
+        // Page links
+        html += '<div class="pagination-pages">';
+        
+        // Always show first page
+        html += `<button class="pagination-link ${currentPage === 1 ? 'active' : ''}" data-page="1">1</button>`;
+        
+        // Show ellipsis if needed
+        if (currentPage > 3) {
+            html += '<span class="pagination-ellipsis">...</span>';
+        }
+        
+        // Show pages around current page
+        for (let i = Math.max(2, currentPage - 1); i <= Math.min(totalPages - 1, currentPage + 1); i++) {
+            if (i === 1 || i === totalPages) continue; // Skip first and last as they're always shown
+            html += `<button class="pagination-link ${currentPage === i ? 'active' : ''}" data-page="${i}">${i}</button>`;
+        }
+        
+        // Show ellipsis if needed
+        if (currentPage < totalPages - 2) {
+            html += '<span class="pagination-ellipsis">...</span>';
+        }
+        
+        // Always show last page if more than one page
+        if (totalPages > 1) {
+            html += `<button class="pagination-link ${currentPage === totalPages ? 'active' : ''}" data-page="${totalPages}">${totalPages}</button>`;
+        }
+        
+        html += '</div>';
+        
+        // Next button
+        html += `<button class="pagination-link ${currentPage === totalPages ? 'disabled' : ''}" 
+                    data-page="${currentPage + 1}" ${currentPage === totalPages ? 'disabled' : ''}>
+                    Next <i class="fas fa-chevron-right"></i>
+                </button>`;
+        
+        // Add items per page selector
+        html += `
+            <div class="items-per-page-container">
+                <label for="items-per-page">Items per page:</label>
+                <select id="items-per-page">
+                    <option value="12" ${itemsPerPage === 12 ? 'selected' : ''}>12</option>
+                    <option value="24" ${itemsPerPage === 24 ? 'selected' : ''}>24</option>
+                    <option value="48" ${itemsPerPage === 48 ? 'selected' : ''}>48</option>
+                    <option value="96" ${itemsPerPage === 96 ? 'selected' : ''}>96</option>
+                </select>
+            </div>
+        `;
+        
+        html += '</div>';
+        
+        return html;
     }
 
     /**
@@ -177,88 +295,259 @@ const RestaurantModule = (function() {
         
         // Update restaurant listings
         updateRestaurantListings();
+
+        // Add items per page selector handling
+        document.addEventListener('change', function(event) {
+            if (event.target.id === 'items-per-page') {
+                itemsPerPage = parseInt(event.target.value);
+                localStorage.setItem('restaurantItemsPerPage', itemsPerPage);
+                currentPage = 1; // Reset to first page when changing items per page
+                updateRestaurantListings();
+            }
+        });
     }
 
     /**
      * Update the restaurant listings based on current sort, filter and view options
+     * @param {Object} searchCriteria - Optional search criteria from SearchModule
      */
-    function updateRestaurantListings() {
+    function updateRestaurantListings(searchCriteria) {
         const restaurantListContainer = document.getElementById('restaurant-list');
+        const paginationContainer = document.getElementById('pagination-container');
         const sortOption = document.getElementById('sort-restaurants')?.value || 'name-asc';
         const filterOption = document.getElementById('filter-restaurants')?.value || 'all';
         const statusOption = document.getElementById('status-filter')?.value || 'all';
-        const viewMode = localStorage.getItem('restaurantViewMode') || 'list';
+        const viewMode = localStorage.getItem('restaurantViewMode') || 'grid';
         
         if (!restaurantListContainer) return;
         
-        // Clear the container
-        restaurantListContainer.innerHTML = '';
+        // Show loading state
+        restaurantListContainer.innerHTML = '<div class="loading-state"><i class="fas fa-spinner fa-spin"></i> Loading restaurants...</div>';
         
         // Get restaurants data
         let restaurants = JSON.parse(localStorage.getItem('restaurants') || '[]');
         
-        // Apply status filter
-        if (statusOption !== 'all') {
-            restaurants = restaurants.filter(r => {
-                const status = r.status || STATUS.DRAFT; // Default to draft if no status
-                return status === statusOption;
-            });
-        }
-        
-        // Apply filter
-        if (filterOption === 'no-concepts') {
-            const restaurantConcepts = JSON.parse(localStorage.getItem('restaurantConcepts') || '[]');
-            const restaurantsWithConcepts = new Set(restaurantConcepts.map(rc => rc.restaurantId));
-            restaurants = restaurants.filter(r => !restaurantsWithConcepts.has(r.id));
-        } else if (filterOption === 'new') {
-            const oneWeekAgo = new Date();
-            oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
-            restaurants = restaurants.filter(r => new Date(r.timestamp) > oneWeekAgo);
-        }
+        // Apply filters based on search criteria or standard filters
+        restaurants = applyFilters(restaurants, searchCriteria, statusOption, filterOption);
         
         // Apply sort
-        switch (sortOption) {
-            case 'name-asc':
-                restaurants.sort((a, b) => a.name.localeCompare(b.name));
-                break;
-            case 'name-desc':
-                restaurants.sort((a, b) => b.name.localeCompare(a.name));
-                break;
-            case 'date-desc':
-                restaurants.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-                break;
-            case 'date-asc':
-                restaurants.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
-                break;
-        }
+        restaurants = applySorting(restaurants, sortOption);
+        
+        // Calculate pagination
+        totalItems = restaurants.length;
+        totalPages = Math.ceil(totalItems / itemsPerPage);
+        if (currentPage > totalPages) currentPage = totalPages || 1;
+        
+        // Get current page of restaurants
+        const startIndex = (currentPage - 1) * itemsPerPage;
+        const paginatedRestaurants = restaurants.slice(startIndex, startIndex + itemsPerPage);
         
         // Update the count
         const countElement = document.getElementById('restaurant-count');
         if (countElement) {
-            countElement.textContent = `${restaurants.length} restaurant${restaurants.length !== 1 ? 's' : ''}`;
+            if (totalItems === 0) {
+                countElement.textContent = 'No restaurants found';
+            } else {
+                countElement.textContent = `${totalItems} restaurant${totalItems !== 1 ? 's' : ''} (showing ${Math.min(startIndex + 1, totalItems)}-${Math.min(startIndex + itemsPerPage, totalItems)})`;
+            }
         }
         
-        // Handle table view specifically
-        if (viewMode === 'table') {
-            createTableView(restaurantListContainer, restaurants);
-            return;
-        }
+        // Clear the container
+        restaurantListContainer.innerHTML = '';
         
-        // Create restaurant elements
-        const promises = restaurants.map(restaurant => createRestaurantElement(restaurant, viewMode));
-        
-        Promise.all(promises)
-            .then(elements => {
-                elements.forEach(element => {
-                    if (element) restaurantListContainer.appendChild(element);
+        // Handle empty state
+        if (paginatedRestaurants.length === 0) {
+            restaurantListContainer.innerHTML = `
+                <div class="empty-state">
+                    <i class="fas fa-utensils empty-icon"></i>
+                    <h3>No restaurants found</h3>
+                    <p>Try adjusting your filters or adding new restaurants</p>
+                </div>
+            `;
+        } 
+        // Handle table view
+        else if (viewMode === 'table') {
+            createTableView(restaurantListContainer, paginatedRestaurants);
+        } 
+        // Handle grid/list view
+        else {
+            const promises = paginatedRestaurants.map(restaurant => createRestaurantElement(restaurant, viewMode));
+            
+            Promise.all(promises)
+                .then(elements => {
+                    elements.forEach(element => {
+                        if (element) restaurantListContainer.appendChild(element);
+                    });
+                    updateBulkActionButtons();
+                })
+                .catch(error => {
+                    console.error('Error creating restaurant elements:', error);
+                    restaurantListContainer.innerHTML = `<div class="error-message">Error loading restaurants: ${error.message}</div>`;
                 });
+        }
+        
+        // Create pagination controls
+        if (paginationContainer) {
+            paginationContainer.innerHTML = generatePaginationControls(currentPage, totalPages);
+        }
+    }
+
+    /**
+     * Apply filters to the restaurant list
+     * @param {Array} restaurants - List of restaurants
+     * @param {Object} searchCriteria - Search criteria
+     * @param {string} statusOption - Status filter option
+     * @param {string} filterOption - General filter option
+     * @returns {Array} - Filtered restaurants
+     */
+    function applyFilters(restaurants, searchCriteria, statusOption, filterOption) {
+        let filtered = [...restaurants];
+        
+        // Apply search criteria if provided
+        if (searchCriteria) {
+            // Text search
+            if (searchCriteria.text) {
+                const searchText = searchCriteria.text.toLowerCase();
+                filtered = filtered.filter(r => 
+                    r.name.toLowerCase().includes(searchText) || 
+                    (r.description && r.description.toLowerCase().includes(searchText)) ||
+                    (r.transcription && r.transcription.toLowerCase().includes(searchText))
+                );
+            }
+            
+            // Concept filter
+            if (searchCriteria.conceptId) {
+                const restaurantConcepts = JSON.parse(localStorage.getItem('restaurantConcepts') || '[]');
+                const restaurantIds = restaurantConcepts
+                    .filter(rc => rc.conceptId == searchCriteria.conceptId)
+                    .map(rc => rc.restaurantId);
                 
-                updateBulkActionButtons();
-            })
-            .catch(error => {
-                console.error('Error creating restaurant elements:', error);
-                restaurantListContainer.innerHTML = `<div class="error-message">Error loading restaurants: ${error.message}</div>`;
-            });
+                filtered = filtered.filter(r => restaurantIds.includes(r.id));
+            }
+            
+            // Status filter
+            if (searchCriteria.statuses && searchCriteria.statuses.length > 0) {
+                filtered = filtered.filter(r => {
+                    const status = r.status || STATUS.DRAFT;
+                    return searchCriteria.statuses.includes(status);
+                });
+            }
+            
+            // Curator filter
+            if (searchCriteria.curatorId) {
+                filtered = filtered.filter(r => r.curatorId == searchCriteria.curatorId);
+            }
+            
+            // Date range
+            if (searchCriteria.dateFrom || searchCriteria.dateTo) {
+                const fromDate = searchCriteria.dateFrom ? new Date(searchCriteria.dateFrom) : null;
+                const toDate = searchCriteria.dateTo ? new Date(searchCriteria.dateTo) : null;
+                
+                filtered = filtered.filter(r => {
+                    const restaurantDate = new Date(r.timestamp);
+                    let matches = true;
+                    
+                    if (fromDate) {
+                        matches = matches && restaurantDate >= fromDate;
+                    }
+                    
+                    if (toDate) {
+                        const endDate = new Date(toDate);
+                        endDate.setHours(23, 59, 59, 999);
+                        matches = matches && restaurantDate <= endDate;
+                    }
+                    
+                    return matches;
+                });
+            }
+            
+            // Content filters
+            if (searchCriteria.hasDescription) {
+                filtered = filtered.filter(r => r.description && r.description.trim() !== '');
+            }
+            
+            if (searchCriteria.hasTranscription) {
+                filtered = filtered.filter(r => r.transcription && r.transcription.trim() !== '');
+            }
+            
+            if (searchCriteria.hasImages) {
+                const photos = JSON.parse(localStorage.getItem('restaurantPhotos') || '[]');
+                const restaurantsWithImages = new Set(photos.map(p => p.restaurantId));
+                filtered = filtered.filter(r => restaurantsWithImages.has(r.id));
+            }
+            
+            if (searchCriteria.hasLocation) {
+                const locations = JSON.parse(localStorage.getItem('restaurantLocations') || '[]');
+                const restaurantsWithLocation = new Set(locations.map(l => l.restaurantId));
+                filtered = filtered.filter(r => restaurantsWithLocation.has(r.id));
+            }
+        }
+        // Apply standard filters if no search criteria provided
+        else {
+            // Status filter
+            if (statusOption !== 'all') {
+                filtered = filtered.filter(r => {
+                    const status = r.status || STATUS.DRAFT;
+                    return status === statusOption;
+                });
+            }
+            
+            // General filters
+            if (filterOption === 'no-concepts') {
+                const restaurantConcepts = JSON.parse(localStorage.getItem('restaurantConcepts') || '[]');
+                const restaurantsWithConcepts = new Set(restaurantConcepts.map(rc => rc.restaurantId));
+                filtered = filtered.filter(r => !restaurantsWithConcepts.has(r.id));
+            } else if (filterOption === 'new') {
+                const oneWeekAgo = new Date();
+                oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+                filtered = filtered.filter(r => new Date(r.timestamp) > oneWeekAgo);
+            }
+        }
+        
+        return filtered;
+    }
+    
+    /**
+     * Apply sorting to the restaurant list
+     * @param {Array} restaurants - List of restaurants
+     * @param {string} sortOption - Sort option
+     * @returns {Array} - Sorted restaurants
+     */
+    function applySorting(restaurants, sortOption) {
+        let sorted = [...restaurants];
+        
+        switch (sortOption) {
+            case 'name-asc':
+                sorted.sort((a, b) => a.name.localeCompare(b.name));
+                break;
+            case 'name-desc':
+                sorted.sort((a, b) => b.name.localeCompare(a.name));
+                break;
+            case 'date-desc':
+                sorted.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+                break;
+            case 'date-asc':
+                sorted.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+                break;
+            case 'curator-asc':
+                sorted.sort((a, b) => {
+                    const curators = JSON.parse(localStorage.getItem('curators') || '[]');
+                    const curatorA = curators.find(c => c.id === a.curatorId)?.name || '';
+                    const curatorB = curators.find(c => c.id === b.curatorId)?.name || '';
+                    return curatorA.localeCompare(curatorB);
+                });
+                break;
+            case 'curator-desc':
+                sorted.sort((a, b) => {
+                    const curators = JSON.parse(localStorage.getItem('curators') || '[]');
+                    const curatorA = curators.find(c => c.id === a.curatorId)?.name || '';
+                    const curatorB = curators.find(c => c.id === b.curatorId)?.name || '';
+                    return curatorB.localeCompare(curatorA);
+                });
+                break;
+        }
+        
+        return sorted;
     }
 
     /**
@@ -267,27 +556,53 @@ const RestaurantModule = (function() {
      * @param {Array} restaurants - Array of restaurant objects
      */
     function createTableView(container, restaurants) {
+        // Create table element
+        const table = document.createElement('table');
+        table.className = 'restaurant-table';
+        
         // Create header row
-        const headerRow = document.createElement('div');
-        headerRow.className = 'restaurant-row header-row';
-        headerRow.innerHTML = `
-            <div class="restaurant-cell checkbox">
-                <input type="checkbox" id="select-all-restaurants">
-            </div>
-            <div class="restaurant-cell name">Name</div>
-            <div class="restaurant-cell status">Status</div>
-            <div class="restaurant-cell curator">Curator</div>
-            <div class="restaurant-cell date">Date Added</div>
-            <div class="restaurant-cell concepts">Concepts</div>
-            <div class="restaurant-cell actions">Actions</div>
+        const thead = document.createElement('thead');
+        thead.innerHTML = `
+            <tr>
+                <th class="checkbox-cell">
+                    <div class="checkbox-wrapper">
+                        <input type="checkbox" id="select-all-restaurants">
+                        <label for="select-all-restaurants" class="custom-checkbox"></label>
+                    </div>
+                </th>
+                <th class="sortable name-cell" data-sort="name">
+                    <div class="th-content">
+                        Restaurant Name
+                        <span class="sort-icon"><i class="fas fa-sort"></i></span>
+                    </div>
+                </th>
+                <th class="status-cell">Status</th>
+                <th class="sortable" data-sort="curator">
+                    <div class="th-content">
+                        Curator
+                        <span class="sort-icon"><i class="fas fa-sort"></i></span>
+                    </div>
+                </th>
+                <th class="sortable date-cell" data-sort="date">
+                    <div class="th-content">
+                        Date Added
+                        <span class="sort-icon"><i class="fas fa-sort"></i></span>
+                    </div>
+                </th>
+                <th class="concepts-cell">Concepts</th>
+                <th class="actions-cell">Actions</th>
+            </tr>
         `;
-        container.appendChild(headerRow);
+        table.appendChild(thead);
+        
+        // Create table body
+        const tbody = document.createElement('tbody');
         
         // Setup select all functionality
-        const selectAllCheckbox = headerRow.querySelector('#select-all-restaurants');
+        const selectAllCheckbox = thead.querySelector('#select-all-restaurants');
         if (selectAllCheckbox) {
             selectAllCheckbox.addEventListener('change', function() {
-                const checkboxes = document.querySelectorAll('.restaurant-select');
+                const checkboxes = tbody.querySelectorAll('.restaurant-select');
                 checkboxes.forEach(checkbox => {
                     checkbox.checked = this.checked;
                 });
@@ -296,101 +611,177 @@ const RestaurantModule = (function() {
             });
         }
         
+        // Add click handlers for sortable headers
+        const sortableHeaders = thead.querySelectorAll('th.sortable');
+        sortableHeaders.forEach(header => {
+            header.addEventListener('click', function() {
+                const sortField = this.dataset.sort;
+                const currentSort = document.getElementById('sort-restaurants').value;
+                let newSort;
+                
+                switch (sortField) {
+                    case 'name':
+                        newSort = currentSort === 'name-asc' ? 'name-desc' : 'name-asc';
+                        break;
+                    case 'curator':
+                        newSort = currentSort === 'curator-asc' ? 'curator-desc' : 'curator-asc';
+                        break;
+                    case 'date':
+                        newSort = currentSort === 'date-asc' ? 'date-desc' : 'date-asc';
+                        break;
+                }
+                
+                document.getElementById('sort-restaurants').value = newSort;
+                updateRestaurantListings();
+            });
+        });
+        
         // Create rows for each restaurant
         const curators = JSON.parse(localStorage.getItem('curators') || '[]');
         const conceptsData = JSON.parse(localStorage.getItem('concepts') || '[]');
         const restaurantConcepts = JSON.parse(localStorage.getItem('restaurantConcepts') || '[]');
         
-        restaurants.forEach(restaurant => {
-            const row = document.createElement('div');
-            row.className = 'restaurant-row';
-            
-            // Find curator
-            const curator = curators.find(c => c.id === restaurant.curatorId);
-            
-            // Get concepts for this restaurant
-            const conceptIds = restaurantConcepts
-                .filter(rc => rc.restaurantId === restaurant.id)
-                .map(rc => rc.conceptId);
-            
-            const concepts = conceptsData
-                .filter(c => conceptIds.includes(c.id))
-                .slice(0, 5); // Limit to first 5 concepts
-            
-            const conceptsHtml = concepts.map(concept => 
-                `<span class="concept-tag">${concept.value}</span>`
-            ).join('');
-            
-            // Get status badge
-            const status = restaurant.status || STATUS.DRAFT;
-            const statusBadge = `<span class="status-badge ${status}">${status}</span>`;
-            
-            row.innerHTML = `
-                <div class="restaurant-cell checkbox">
-                    <input type="checkbox" class="restaurant-select" value="${restaurant.id}">
-                </div>
-                <div class="restaurant-cell name">${restaurant.name}</div>
-                <div class="restaurant-cell status">${statusBadge}</div>
-                <div class="restaurant-cell curator">${curator ? curator.name : 'Unknown'}</div>
-                <div class="restaurant-cell date">${new Date(restaurant.timestamp).toLocaleDateString()}</div>
-                <div class="restaurant-cell concepts">${conceptsHtml}</div>
-                <div class="restaurant-cell actions">
-                    <button class="btn btn-icon view-restaurant" data-id="${restaurant.id}" title="View Details">
-                        <i class="fas fa-eye"></i>
-                    </button>
-                    <button class="btn btn-icon edit-restaurant" data-id="${restaurant.id}" title="Edit">
-                        <i class="fas fa-edit"></i>
-                    </button>
-                    <button class="btn btn-icon delete-restaurant" data-id="${restaurant.id}" title="Delete">
-                        <i class="fas fa-trash"></i>
-                    </button>
-                </div>
-            `;
-            
-            // Add event listeners to action buttons
-            const viewBtn = row.querySelector('.view-restaurant');
-            if (viewBtn) {
-                viewBtn.addEventListener('click', function() {
-                    viewRestaurantDetails(parseInt(this.dataset.id));
-                });
-            }
-            
-            const editBtn = row.querySelector('.edit-restaurant');
-            if (editBtn) {
-                editBtn.addEventListener('click', function() {
-                    editRestaurant(parseInt(this.dataset.id));
-                });
-            }
-            
-            const deleteBtn = row.querySelector('.delete-restaurant');
-            if (deleteBtn) {
-                deleteBtn.addEventListener('click', function() {
-                    if (confirm(`Are you sure you want to delete "${restaurant.name}"?`)) {
-                        deleteRestaurants([parseInt(this.dataset.id)]);
-                        updateRestaurantListings();
-                        UIModule.showToast('Restaurant deleted', 'success');
-                    }
-                });
-            }
-            
-            const checkbox = row.querySelector('.restaurant-select');
-            if (checkbox) {
-                checkbox.addEventListener('change', updateBulkActionButtons);
-            }
-            
-            container.appendChild(row);
-        });
-        
         if (restaurants.length === 0) {
-            const emptyRow = document.createElement('div');
-            emptyRow.className = 'restaurant-row empty-row';
+            const emptyRow = document.createElement('tr');
+            emptyRow.className = 'empty-row';
             emptyRow.innerHTML = `
-                <div class="restaurant-cell" colspan="7" style="text-align:center;padding:2rem;">
-                    No restaurants found. Try adjusting your filters or adding a new restaurant.
-                </div>
+                <td colspan="7">
+                    <div class="empty-state">
+                        <i class="fas fa-utensils empty-icon"></i>
+                        <h3>No restaurants found</h3>
+                        <p>Try adjusting your filters or adding new restaurants</p>
+                    </div>
+                </td>
             `;
-            container.appendChild(emptyRow);
+            tbody.appendChild(emptyRow);
+        } else {
+            restaurants.forEach(restaurant => {
+                const row = document.createElement('tr');
+                
+                // Find curator
+                const curator = curators.find(c => c.id === restaurant.curatorId);
+                
+                // Get concepts for this restaurant
+                const conceptIds = restaurantConcepts
+                    .filter(rc => rc.restaurantId === restaurant.id)
+                    .map(rc => rc.conceptId);
+                
+                const concepts = conceptsData
+                    .filter(c => conceptIds.includes(c.id))
+                    .slice(0, 3); // Limit to first 3 concepts in table view for space
+                
+                const conceptsHtml = concepts.length > 0 
+                    ? concepts.map(concept => 
+                        `<span class="concept-tag ${concept.category.toLowerCase()}" title="${concept.value}">${concept.value}</span>`
+                      ).join('')
+                    : '<span class="no-concepts">No concepts</span>';
+                
+                const conceptsWithMore = conceptIds.length > 3
+                    ? conceptsHtml + `<span class="concept-more">+${conceptIds.length - 3}</span>`
+                    : conceptsHtml;
+                
+                // Get status badge
+                const status = restaurant.status || STATUS.DRAFT;
+                
+                row.innerHTML = `
+                    <td class="checkbox-cell">
+                        <div class="checkbox-wrapper">
+                            <input type="checkbox" class="restaurant-select" id="restaurant-${restaurant.id}" value="${restaurant.id}">
+                            <label for="restaurant-${restaurant.id}" class="custom-checkbox"></label>
+                        </div>
+                    </td>
+                    <td class="name-cell">
+                        <div class="restaurant-name-container" title="${restaurant.name}">
+                            ${restaurant.name}
+                        </div>
+                    </td>
+                    <td class="status-cell"><span class="status-badge ${status}">${status}</span></td>
+                    <td>${curator ? curator.name : 'Unknown'}</td>
+                    <td class="date-cell">${new Date(restaurant.timestamp).toLocaleDateString()}</td>
+                    <td class="concepts-cell">${conceptsWithMore}</td>
+                    <td class="actions-cell">
+                        <div class="table-actions">
+                            <button class="btn btn-icon view-restaurant" data-id="${restaurant.id}" title="View Details">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                            <button class="btn btn-icon edit-restaurant" data-id="${restaurant.id}" title="Edit">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            <button class="btn btn-icon delete-restaurant" data-id="${restaurant.id}" title="Delete">
+                                <i class="fas fa-trash-alt"></i>
+                            </button>
+                            <div class="dropdown">
+                                <button class="btn btn-icon dropdown-toggle" title="More actions">
+                                    <i class="fas fa-ellipsis-v"></i>
+                                </button>
+                                <div class="dropdown-menu">
+                                    <a href="#" class="duplicate-restaurant" data-id="${restaurant.id}">Duplicate</a>
+                                    <a href="#" class="export-restaurant" data-id="${restaurant.id}">Export</a>
+                                </div>
+                            </div>
+                        </div>
+                    </td>
+                `;
+                
+                // Add event listeners to action buttons
+                const viewBtn = row.querySelector('.view-restaurant');
+                if (viewBtn) {
+                    viewBtn.addEventListener('click', function() {
+                        viewRestaurantDetails(parseInt(this.dataset.id));
+                    });
+                }
+                
+                const editBtn = row.querySelector('.edit-restaurant');
+                if (editBtn) {
+                    editBtn.addEventListener('click', function() {
+                        editRestaurant(parseInt(this.dataset.id));
+                    });
+                }
+                
+                const deleteBtn = row.querySelector('.delete-restaurant');
+                if (deleteBtn) {
+                    deleteBtn.addEventListener('click', function() {
+                        if (confirm(`Are you sure you want to delete "${restaurant.name}"?`)) {
+                            deleteRestaurants([parseInt(this.dataset.id)]);
+                            updateRestaurantListings();
+                            UIModule.showToast('Restaurant deleted', 'success');
+                        }
+                    });
+                }
+                
+                const checkbox = row.querySelector('.restaurant-select');
+                if (checkbox) {
+                    checkbox.addEventListener('change', updateBulkActionButtons);
+                }
+                
+                // Add dropdown toggle functionality
+                const dropdownToggle = row.querySelector('.dropdown-toggle');
+                if (dropdownToggle) {
+                    dropdownToggle.addEventListener('click', function(e) {
+                        e.stopPropagation();
+                        const dropdown = this.nextElementSibling;
+                        dropdown.classList.toggle('show');
+                        
+                        // Close other open dropdowns
+                        document.querySelectorAll('.dropdown-menu.show').forEach(menu => {
+                            if (menu !== dropdown) menu.classList.remove('show');
+                        });
+                    });
+                }
+                
+                tbody.appendChild(row);
+            });
         }
+        
+        table.appendChild(tbody);
+        container.appendChild(table);
+        
+        // Add document click handler to close dropdowns
+        document.addEventListener('click', function() {
+            document.querySelectorAll('.dropdown-menu.show').forEach(menu => {
+                menu.classList.remove('show');
+            });
+        });
     }
 
     /**
@@ -417,21 +808,20 @@ const RestaurantModule = (function() {
             
         const restaurantConceptsData = concepts
             .filter(c => restaurantConceptIds.includes(c.id))
-            .slice(0, 5); // Show only first 5 concepts in the card
+            .slice(0, 4); // Show only first 4 concepts in the card
         
         // Create concept tags HTML
         const conceptsHtml = restaurantConceptsData.length > 0
             ? '<div class="restaurant-concepts">' + 
-              restaurantConceptsData.map(c => `<span class="concept-tag">${c.value}</span>`).join('') +
-              (restaurantConceptIds.length > 5 ? `<span class="concept-more">+${restaurantConceptIds.length - 5} more</span>` : '') +
+              restaurantConceptsData.map(c => `<span class="concept-tag ${c.category.toLowerCase()}" title="${c.value}">${c.value}</span>`).join('') +
+              (restaurantConceptIds.length > 4 ? `<span class="concept-more">+${restaurantConceptIds.length - 4}</span>` : '') +
               '</div>'
-            : '';
+            : '<div class="restaurant-concepts empty">No concepts assigned</div>';
             
         // Get status badge
         const status = restaurant.status || STATUS.DRAFT;
-        const statusBadge = `<span class="status-badge ${status}">${status}</span>`;
 
-        // Try to get a restaurant image if available
+        // Try to get a restaurant image
         let imageHtml = '';
         try {
             const images = await StorageModule.getRestaurantImages(restaurant.id);
@@ -440,41 +830,78 @@ const RestaurantModule = (function() {
                 if (imageUrl) {
                     imageHtml = `
                         <div class="restaurant-image">
-                            <img src="${imageUrl}" alt="${restaurant.name}">
+                            <img src="${imageUrl}" alt="${restaurant.name}" loading="lazy">
+                            <div class="image-overlay">
+                                <i class="fas fa-images"></i>
+                                <span>${images.length}</span>
+                            </div>
                         </div>
                     `;
                 }
+            } else {
+                imageHtml = `
+                    <div class="restaurant-image placeholder">
+                        <div class="placeholder-icon">
+                            <i class="fas fa-utensils"></i>
+                        </div>
+                    </div>
+                `;
             }
         } catch (error) {
             console.warn('Could not load restaurant image:', error);
+            imageHtml = `
+                <div class="restaurant-image placeholder">
+                    <div class="placeholder-icon">
+                        <i class="fas fa-utensils"></i>
+                    </div>
+                </div>
+            `;
         }
-
-        // Restaurant card HTML - different layouts based on view mode
+        
+        // Restaurant card HTML - modern design with better organization
         element.innerHTML = `
             <div class="restaurant-card">
                 <div class="restaurant-header">
-                    <input type="checkbox" class="restaurant-select" value="${restaurant.id}">
-                    <h3>${restaurant.name} ${statusBadge}</h3>
+                    <div class="checkbox-wrapper">
+                        <input type="checkbox" class="restaurant-select" id="card-restaurant-${restaurant.id}" value="${restaurant.id}">
+                        <label for="card-restaurant-${restaurant.id}" class="custom-checkbox"></label>
+                    </div>
+                    <div class="restaurant-title">
+                        <h3 title="${restaurant.name}">${restaurant.name}</h3>
+                        <span class="status-badge ${status}">${status}</span>
+                    </div>
                 </div>
                 ${imageHtml}
                 <div class="restaurant-details">
-                    <p class="restaurant-date">Added: ${new Date(restaurant.timestamp).toLocaleDateString()}</p>
-                    <p class="restaurant-curator">By: ${curator ? curator.name : 'Unknown'}</p>
+                    <div class="restaurant-meta">
+                        <div class="meta-item">
+                            <i class="fas fa-calendar-alt"></i>
+                            <span>${new Date(restaurant.timestamp).toLocaleDateString()}</span>
+                        </div>
+                        <div class="meta-item">
+                            <i class="fas fa-user-circle"></i>
+                            <span>${curator ? curator.name : 'Unknown'}</span>
+                        </div>
+                    </div>
+                    
                     ${restaurant.description ? 
-                        `<p class="restaurant-description">${restaurant.description.substring(0, 100)}${restaurant.description.length > 100 ? '...' : ''}</p>` 
-                        : '<p class="restaurant-description empty">No description</p>'}
+                        `<p class="restaurant-description">${restaurant.description.substring(0, 140)}${restaurant.description.length > 140 ? '...' : ''}</p>` 
+                        : '<p class="restaurant-description empty">No description available</p>'}
+                    
                     ${conceptsHtml}
                 </div>
                 <div class="restaurant-actions">
-                    <button class="btn btn-icon view-restaurant" data-id="${restaurant.id}" title="View Details">
-                        <i class="fas fa-eye"></i>
+                    <button class="btn btn-primary view-restaurant" data-id="${restaurant.id}">
+                        <i class="fas fa-eye"></i> View Details
                     </button>
-                    <button class="btn btn-icon edit-restaurant" data-id="${restaurant.id}" title="Edit">
-                        <i class="fas fa-edit"></i>
-                    </button>
-                    <button class="btn btn-icon delete-restaurant" data-id="${restaurant.id}" title="Delete">
-                        <i class="fas fa-trash"></i>
-                    </button>
+                    <div class="action-buttons">
+                        <button class="btn btn-icon edit-restaurant" data-id="${restaurant.id}" title="Edit">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                        <button class="btn btn-icon delete-restaurant" data-id="${restaurant.id}" title="Delete">
+                            <i class="fas fa-trash-alt"></i>
+                        </button>
+                    </div>
                 </div>
             </div>
         `;
@@ -517,19 +944,32 @@ const RestaurantModule = (function() {
      * Update the state of bulk action buttons based on selections
      */
     function updateBulkActionButtons() {
-        const selectedIds = getSelectedRestaurants();
-        const bulkTagBtn = document.getElementById('bulk-tag');
-        const exportDataBtn = document.getElementById('export-data');
-        const bulkDeleteBtn = document.getElementById('bulk-delete');
+        const selectedCount = document.querySelectorAll('.restaurant-select:checked').length;
+        const bulkActionButtons = document.querySelectorAll('.bulk-action-btn');
+        
+        bulkActionButtons.forEach(button => {
+            if (selectedCount > 0) {
+                button.disabled = false;
+                button.classList.remove('disabled');
+            } else {
+                button.disabled = true;
+                button.classList.add('disabled');
+            }
+        });
+        
+        // Update counter and show/hide selection info
+        const selectionInfo = document.querySelector('.selection-info');
         const selectedCounter = document.getElementById('selected-count');
         
-        if (selectedCounter) {
-            selectedCounter.textContent = selectedIds.length > 0 ? `${selectedIds.length} selected` : '';
+        if (selectionInfo && selectedCounter) {
+            selectedCounter.textContent = selectedCount;
+            
+            if (selectedCount > 0) {
+                selectionInfo.classList.add('active');
+            } else {
+                selectionInfo.classList.remove('active');
+            }
         }
-        
-        if (bulkTagBtn) bulkTagBtn.disabled = selectedIds.length === 0;
-        if (exportDataBtn) exportDataBtn.disabled = selectedIds.length === 0;
-        if (bulkDeleteBtn) bulkDeleteBtn.disabled = selectedIds.length === 0;
     }
 
     /**
@@ -872,6 +1312,7 @@ const RestaurantModule = (function() {
         viewRestaurantDetails: viewRestaurantDetails,
         editRestaurant: editRestaurant,
         deleteRestaurants: deleteRestaurants,
-        getSelectedRestaurants: getSelectedRestaurants
+        getSelectedRestaurants: getSelectedRestaurants,
+        goToPage: goToPage
     };
 })();

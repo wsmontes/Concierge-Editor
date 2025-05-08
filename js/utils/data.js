@@ -1,10 +1,10 @@
 /**
- * Data Module - Handles data operations, storage, and processing
+ * Data Module - Handles data operations, statistics, and analytics
  * Dependencies: None
  */
 
 const DataModule = (function() {
-    // Restaurant status constants
+    // Restaurant status constants for consistency
     const STATUS = {
         DRAFT: 'draft',
         REVISED: 'revised',
@@ -13,219 +13,8 @@ const DataModule = (function() {
     };
     
     /**
-     * Process and store imported restaurant data
-     * @param {Object} data - The validated import data
-     * @return {Promise} - Resolves when processing is complete
-     */
-    function processImportedData(data) {
-        return new Promise((resolve, reject) => {
-            try {
-                // In a real implementation, this would store to IndexedDB or similar
-                // For now, we'll store in localStorage as a simple demonstration
-                
-                // Store or merge curators
-                const existingCurators = JSON.parse(localStorage.getItem('curators') || '[]');
-                const newCurators = mergeCurators(existingCurators, data.curators);
-                localStorage.setItem('curators', JSON.stringify(newCurators));
-                
-                // Store or merge concepts
-                const existingConcepts = JSON.parse(localStorage.getItem('concepts') || '[]');
-                const newConcepts = mergeConcepts(existingConcepts, data.concepts);
-                localStorage.setItem('concepts', JSON.stringify(newConcepts));
-                
-                // Store or merge restaurants
-                const existingRestaurants = JSON.parse(localStorage.getItem('restaurants') || '[]');
-                
-                // Set default status for imported restaurants
-                const restaurantsWithStatus = data.restaurants.map(restaurant => {
-                    return { ...restaurant, status: restaurant.status || STATUS.DRAFT };
-                });
-                
-                const newRestaurants = mergeRestaurants(existingRestaurants, restaurantsWithStatus);
-                localStorage.setItem('restaurants', JSON.stringify(newRestaurants));
-                
-                // Store or merge restaurant concepts
-                const existingRestaurantConcepts = JSON.parse(localStorage.getItem('restaurantConcepts') || '[]');
-                const newRestaurantConcepts = mergeRestaurantConcepts(existingRestaurantConcepts, data.restaurantConcepts);
-                localStorage.setItem('restaurantConcepts', JSON.stringify(newRestaurantConcepts));
-                
-                // Process restaurant locations if present
-                if (Array.isArray(data.restaurantLocations)) {
-                    const existingLocations = JSON.parse(localStorage.getItem('restaurantLocations') || '[]');
-                    const newLocations = mergeRestaurantLocations(existingLocations, data.restaurantLocations);
-                    localStorage.setItem('restaurantLocations', JSON.stringify(newLocations));
-                }
-                
-                // Process restaurant photos if present
-                if (Array.isArray(data.restaurantPhotos)) {
-                    const existingPhotos = JSON.parse(localStorage.getItem('restaurantPhotos') || '[]');
-                    const newPhotos = mergeRestaurantPhotos(existingPhotos, data.restaurantPhotos);
-                    localStorage.setItem('restaurantPhotos', JSON.stringify(newPhotos));
-                }
-                
-                resolve();
-            } catch (error) {
-                reject(error);
-            }
-        });
-    }
-
-    /**
-     * Validate imported data structure
-     * @param {Object} data - The parsed JSON data
-     * @return {boolean} - Whether the data is valid
-     */
-    function validateImportData(data) {
-        // Basic validation of expected structure based on import specification
-        return (
-            data && 
-            Array.isArray(data.restaurants) && 
-            Array.isArray(data.concepts) && 
-            Array.isArray(data.curators)
-        );
-    }
-
-    /**
-     * Merge curator data, avoiding duplicates
-     * @param {Array} existing - Existing curators
-     * @param {Array} imported - Imported curators
-     * @return {Array} - Merged curator array
-     */
-    function mergeCurators(existing, imported) {
-        const idMap = new Map();
-        existing.forEach(curator => idMap.set(curator.id, curator));
-        
-        imported.forEach(curator => {
-            if (!idMap.has(curator.id)) {
-                idMap.set(curator.id, curator);
-            }
-        });
-        
-        return Array.from(idMap.values());
-    }
-
-    /**
-     * Merge concept data, avoiding duplicates but updating existing
-     * @param {Array} existing - Existing concepts
-     * @param {Array} imported - Imported concepts
-     * @return {Array} - Merged concept array
-     */
-    function mergeConcepts(existing, imported) {
-        const map = new Map();
-        existing.forEach(concept => map.set(concept.id, concept));
-        
-        imported.forEach(concept => {
-            // For concepts, we update with newer data if it exists
-            if (map.has(concept.id)) {
-                const existingConcept = map.get(concept.id);
-                // Update only if the imported concept is newer
-                if (new Date(concept.timestamp) > new Date(existingConcept.timestamp)) {
-                    map.set(concept.id, concept);
-                }
-            } else {
-                map.set(concept.id, concept);
-            }
-        });
-        
-        return Array.from(map.values());
-    }
-
-    /**
-     * Merge restaurant data, avoiding duplicates but updating existing
-     * @param {Array} existing - Existing restaurants
-     * @param {Array} imported - Imported restaurants
-     * @return {Array} - Merged restaurant array
-     */
-    function mergeRestaurants(existing, imported) {
-        const map = new Map();
-        existing.forEach(restaurant => map.set(restaurant.id, restaurant));
-        
-        imported.forEach(restaurant => {
-            // For restaurants, we update with newer data if it exists
-            if (map.has(restaurant.id)) {
-                const existingRestaurant = map.get(restaurant.id);
-                // Update only if the imported restaurant is newer
-                if (new Date(restaurant.timestamp) > new Date(existingRestaurant.timestamp)) {
-                    // Preserve status if not present in imported data
-                    if (!restaurant.status && existingRestaurant.status) {
-                        restaurant.status = existingRestaurant.status;
-                    }
-                    map.set(restaurant.id, restaurant);
-                }
-            } else {
-                map.set(restaurant.id, restaurant);
-            }
-        });
-        
-        return Array.from(map.values());
-    }
-
-    /**
-     * Merge restaurant concept relationships, avoiding duplicates
-     * @param {Array} existing - Existing relationships
-     * @param {Array} imported - Imported relationships
-     * @return {Array} - Merged relationship array
-     */
-    function mergeRestaurantConcepts(existing, imported) {
-        const map = new Map();
-        
-        // Create unique keys for each relationship
-        existing.forEach(rc => {
-            const key = `${rc.restaurantId}-${rc.conceptId}`;
-            map.set(key, rc);
-        });
-        
-        imported.forEach(rc => {
-            const key = `${rc.restaurantId}-${rc.conceptId}`;
-            if (!map.has(key)) {
-                map.set(key, rc);
-            }
-        });
-        
-        return Array.from(map.values());
-    }
-
-    /**
-     * Merge restaurant locations, avoiding duplicates but updating existing
-     * @param {Array} existing - Existing locations
-     * @param {Array} imported - Imported locations
-     * @return {Array} - Merged locations array
-     */
-    function mergeRestaurantLocations(existing, imported) {
-        const map = new Map();
-        existing.forEach(location => map.set(location.restaurantId, location));
-        
-        imported.forEach(location => {
-            map.set(location.restaurantId, location);
-        });
-        
-        return Array.from(map.values());
-    }
-    
-    /**
-     * Merge restaurant photo references, avoiding duplicates
-     * @param {Array} existing - Existing photo references
-     * @param {Array} imported - Imported photo references
-     * @return {Array} - Merged photo references array
-     */
-    function mergeRestaurantPhotos(existing, imported) {
-        const map = new Map();
-        
-        // Create unique keys for each photo
-        existing.forEach(photo => {
-            map.set(photo.id.toString(), photo);
-        });
-        
-        imported.forEach(photo => {
-            map.set(photo.id.toString(), photo);
-        });
-        
-        return Array.from(map.values());
-    }
-    
-    /**
-     * Get statistics about the restaurant data
-     * @return {Object} - Object containing statistics
+     * Get statistics about the data in the application
+     * @return {Object} - Object containing various statistics
      */
     function getDataStatistics() {
         const restaurants = JSON.parse(localStorage.getItem('restaurants') || '[]');
@@ -255,12 +44,374 @@ const DataModule = (function() {
             categoryCounts
         };
     }
+    
+    /**
+     * Get restaurant analytics over time
+     * @param {string} timeframe - 'week', 'month', or 'year' (default: 'month')
+     * @return {Object} - Analytics data for visualization
+     */
+    function getRestaurantAnalytics(timeframe = 'month') {
+        const restaurants = JSON.parse(localStorage.getItem('restaurants') || '[]');
+        
+        // Prepare date ranges based on timeframe
+        const now = new Date();
+        const dates = [];
+        const counts = [];
+        const statusesByDate = [];
+        
+        switch(timeframe) {
+            case 'week':
+                // Last 7 days
+                for (let i = 6; i >= 0; i--) {
+                    const date = new Date(now);
+                    date.setDate(date.getDate() - i);
+                    dates.push(formatDate(date));
+                    counts.push(0);
+                    statusesByDate.push({
+                        [STATUS.DRAFT]: 0,
+                        [STATUS.REVISED]: 0,
+                        [STATUS.PRODUCTION]: 0,
+                        [STATUS.ARCHIVED]: 0
+                    });
+                }
+                break;
+            
+            case 'year':
+                // Last 12 months
+                for (let i = 11; i >= 0; i--) {
+                    const date = new Date(now);
+                    date.setMonth(date.getMonth() - i);
+                    dates.push(formatMonthYear(date));
+                    counts.push(0);
+                    statusesByDate.push({
+                        [STATUS.DRAFT]: 0,
+                        [STATUS.REVISED]: 0,
+                        [STATUS.PRODUCTION]: 0,
+                        [STATUS.ARCHIVED]: 0
+                    });
+                }
+                break;
+            
+            case 'month':
+            default:
+                // Last 30 days
+                for (let i = 29; i >= 0; i--) {
+                    const date = new Date(now);
+                    date.setDate(date.getDate() - i);
+                    dates.push(formatDate(date));
+                    counts.push(0);
+                    statusesByDate.push({
+                        [STATUS.DRAFT]: 0,
+                        [STATUS.REVISED]: 0,
+                        [STATUS.PRODUCTION]: 0,
+                        [STATUS.ARCHIVED]: 0
+                    });
+                }
+                break;
+        }
+        
+        // Process restaurant data
+        restaurants.forEach(restaurant => {
+            const timestamp = new Date(restaurant.timestamp);
+            const dateStr = timeframe === 'year' 
+                ? formatMonthYear(timestamp) 
+                : formatDate(timestamp);
+            
+            const index = dates.indexOf(dateStr);
+            if (index !== -1) {
+                counts[index]++;
+                
+                // Track status counts
+                const status = restaurant.status || STATUS.DRAFT;
+                statusesByDate[index][status]++;
+            }
+        });
+        
+        // Calculate totals for each status
+        const statusTotals = {
+            [STATUS.DRAFT]: 0,
+            [STATUS.REVISED]: 0,
+            [STATUS.PRODUCTION]: 0,
+            [STATUS.ARCHIVED]: 0
+        };
+        
+        statusesByDate.forEach(dayStats => {
+            Object.keys(dayStats).forEach(status => {
+                statusTotals[status] += dayStats[status];
+            });
+        });
+        
+        // Return formatted analytics data
+        return {
+            labels: dates,
+            datasets: [
+                {
+                    label: 'All Restaurants',
+                    data: counts
+                },
+                {
+                    label: 'Draft',
+                    data: statusesByDate.map(day => day[STATUS.DRAFT])
+                },
+                {
+                    label: 'Revised',
+                    data: statusesByDate.map(day => day[STATUS.REVISED])
+                },
+                {
+                    label: 'Production',
+                    data: statusesByDate.map(day => day[STATUS.PRODUCTION])
+                },
+                {
+                    label: 'Archived',
+                    data: statusesByDate.map(day => day[STATUS.ARCHIVED])
+                }
+            ],
+            totals: {
+                restaurants: restaurants.length,
+                byStatus: statusTotals
+            }
+        };
+    }
+    
+    /**
+     * Format a date as MM/DD/YYYY
+     * @param {Date} date - Date to format
+     * @return {string} - Formatted date string
+     */
+    function formatDate(date) {
+        return `${date.getMonth() + 1}/${date.getDate()}/${date.getFullYear()}`;
+    }
+    
+    /**
+     * Format a date as Month YYYY
+     * @param {Date} date - Date to format
+     * @return {string} - Formatted date string
+     */
+    function formatMonthYear(date) {
+        const months = [
+            'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+            'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+        ];
+        return `${months[date.getMonth()]} ${date.getFullYear()}`;
+    }
+    
+    /**
+     * Get popular concepts based on usage
+     * @param {number} limit - Maximum number of concepts to return
+     * @return {Array} - Array of concepts with usage counts
+     */
+    function getPopularConcepts(limit = 15) {
+        const concepts = JSON.parse(localStorage.getItem('concepts') || '[]');
+        const restaurantConcepts = JSON.parse(localStorage.getItem('restaurantConcepts') || '[]');
+        
+        // Count concept usage
+        const conceptCounts = {};
+        restaurantConcepts.forEach(rc => {
+            conceptCounts[rc.conceptId] = (conceptCounts[rc.conceptId] || 0) + 1;
+        });
+        
+        // Attach counts to concepts and sort
+        return concepts
+            .map(concept => ({
+                ...concept,
+                count: conceptCounts[concept.id] || 0
+            }))
+            .sort((a, b) => b.count - a.count)
+            .slice(0, limit);
+    }
+    
+    /**
+     * Validate imported data structure
+     * @param {Object} data - Data to validate
+     * @return {boolean} - Whether the data is valid
+     */
+    function validateImportData(data) {
+        // Basic validation - check that required properties exist
+        if (!data) return false;
+        
+        // At minimum, we need restaurants or concepts
+        if (!data.restaurants && !data.concepts) return false;
+        
+        // If restaurants exist, validate structure
+        if (data.restaurants && !Array.isArray(data.restaurants)) return false;
+        
+        // If concepts exist, validate structure
+        if (data.concepts && !Array.isArray(data.concepts)) return false;
+        
+        return true;
+    }
+    
+    /**
+     * Process imported data and store in localStorage
+     * @param {Object} data - Data to import
+     * @return {Promise} - Promise that resolves when import is complete
+     */
+    async function processImportedData(data) {
+        // Make sure data is valid
+        if (!validateImportData(data)) {
+            return Promise.reject(new Error('Invalid data format'));
+        }
+        
+        return new Promise((resolve, reject) => {
+            try {
+                // Process restaurants
+                if (data.restaurants && Array.isArray(data.restaurants)) {
+                    const existingRestaurants = JSON.parse(localStorage.getItem('restaurants') || '[]');
+                    
+                    // Merge existing and new restaurants by ID
+                    const mergedRestaurants = mergeArraysById(existingRestaurants, data.restaurants);
+                    localStorage.setItem('restaurants', JSON.stringify(mergedRestaurants));
+                }
+                
+                // Process concepts
+                if (data.concepts && Array.isArray(data.concepts)) {
+                    const existingConcepts = JSON.parse(localStorage.getItem('concepts') || '[]');
+                    
+                    // Merge existing and new concepts by ID
+                    const mergedConcepts = mergeArraysById(existingConcepts, data.concepts);
+                    localStorage.setItem('concepts', JSON.stringify(mergedConcepts));
+                }
+                
+                // Process restaurant-concept relationships
+                if (data.restaurantConcepts && Array.isArray(data.restaurantConcepts)) {
+                    const existingRelationships = JSON.parse(localStorage.getItem('restaurantConcepts') || '[]');
+                    
+                    // Use custom merge to prevent duplicates in relationships
+                    const mergedRelationships = mergeRelationships(existingRelationships, data.restaurantConcepts);
+                    localStorage.setItem('restaurantConcepts', JSON.stringify(mergedRelationships));
+                }
+                
+                // Process locations
+                if (data.restaurantLocations && Array.isArray(data.restaurantLocations)) {
+                    const existingLocations = JSON.parse(localStorage.getItem('restaurantLocations') || '[]');
+                    
+                    // Merge by restaurantId since there should be one location per restaurant
+                    const mergedLocations = mergeArraysByProperty(existingLocations, data.restaurantLocations, 'restaurantId');
+                    localStorage.setItem('restaurantLocations', JSON.stringify(mergedLocations));
+                }
+                
+                // Process photo references
+                if (data.restaurantPhotos && Array.isArray(data.restaurantPhotos)) {
+                    const existingPhotos = JSON.parse(localStorage.getItem('restaurantPhotos') || '[]');
+                    
+                    // Merge by ID
+                    const mergedPhotos = mergeArraysById(existingPhotos, data.restaurantPhotos);
+                    localStorage.setItem('restaurantPhotos', JSON.stringify(mergedPhotos));
+                }
+                
+                // Process curators
+                if (data.curators && Array.isArray(data.curators)) {
+                    const existingCurators = JSON.parse(localStorage.getItem('curators') || '[]');
+                    
+                    // Merge by ID
+                    const mergedCurators = mergeArraysById(existingCurators, data.curators);
+                    localStorage.setItem('curators', JSON.stringify(mergedCurators));
+                }
+                
+                resolve({
+                    success: true,
+                    message: 'Data imported successfully'
+                });
+                
+            } catch (error) {
+                console.error('Error processing imported data:', error);
+                reject(new Error('Failed to process imported data: ' + error.message));
+            }
+        });
+    }
+    
+    /**
+     * Merge two arrays of objects by ID, newer objects replace older ones
+     * @param {Array} existingArray - Existing array of objects
+     * @param {Array} newArray - New array of objects
+     * @return {Array} - Merged array
+     */
+    function mergeArraysById(existingArray, newArray) {
+        // Create a map of existing items by ID
+        const itemMap = new Map();
+        
+        // Add existing items to map
+        existingArray.forEach(item => {
+            if (item.id) {
+                itemMap.set(item.id, item);
+            }
+        });
+        
+        // Update/add new items
+        newArray.forEach(item => {
+            if (item.id) {
+                itemMap.set(item.id, item);
+            }
+        });
+        
+        // Convert map back to array
+        return Array.from(itemMap.values());
+    }
+    
+    /**
+     * Merge two arrays of objects by a specified property
+     * @param {Array} existingArray - Existing array of objects
+     * @param {Array} newArray - New array of objects
+     * @param {string} property - Property to merge by
+     * @return {Array} - Merged array
+     */
+    function mergeArraysByProperty(existingArray, newArray, property) {
+        // Create a map of existing items by property
+        const itemMap = new Map();
+        
+        // Add existing items to map
+        existingArray.forEach(item => {
+            if (item[property] !== undefined) {
+                itemMap.set(item[property], item);
+            }
+        });
+        
+        // Update/add new items
+        newArray.forEach(item => {
+            if (item[property] !== undefined) {
+                itemMap.set(item[property], item);
+            }
+        });
+        
+        // Convert map back to array
+        return Array.from(itemMap.values());
+    }
+    
+    /**
+     * Merge restaurant-concept relationships, avoiding duplicates
+     * @param {Array} existingRelationships - Existing relationships
+     * @param {Array} newRelationships - New relationships
+     * @return {Array} - Merged relationships
+     */
+    function mergeRelationships(existingRelationships, newRelationships) {
+        // Create a set of existing relationship keys
+        const relationshipSet = new Set();
+        const result = [...existingRelationships];
+        
+        // Add existing relationships to set
+        existingRelationships.forEach(rel => {
+            const key = `${rel.restaurantId}-${rel.conceptId}`;
+            relationshipSet.add(key);
+        });
+        
+        // Add new relationships if they don't already exist
+        newRelationships.forEach(rel => {
+            const key = `${rel.restaurantId}-${rel.conceptId}`;
+            if (!relationshipSet.has(key)) {
+                relationshipSet.add(key);
+                result.push(rel);
+            }
+        });
+        
+        return result;
+    }
 
     // Public API
     return {
-        processImportedData: processImportedData,
-        validateImportData: validateImportData,
         getDataStatistics: getDataStatistics,
-        STATUS: STATUS
+        getRestaurantAnalytics: getRestaurantAnalytics,
+        getPopularConcepts: getPopularConcepts,
+        validateImportData: validateImportData,
+        processImportedData: processImportedData
     };
 })();

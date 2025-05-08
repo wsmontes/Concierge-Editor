@@ -75,9 +75,41 @@ const NavigationModule = (function() {
             });
         });
     }
+    
+    /**
+     * Navigate to a specific section programmatically
+     * @param {string} sectionName - The section to navigate to (without the # symbol)
+     */
+    function navigateTo(sectionName) {
+        if (!sectionName) return;
+        
+        const targetId = `#${sectionName}`;
+        const targetLink = document.querySelector(`.sidebar-nav a[href="${targetId}"]`);
+        
+        if (targetLink) {
+            targetLink.click();
+        } else {
+            // Direct navigation if link not found
+            document.querySelectorAll('.content-section').forEach(section => {
+                section.classList.remove('active');
+            });
+            
+            const targetSection = document.querySelector(targetId);
+            if (targetSection) {
+                targetSection.classList.add('active');
+                
+                // Update page title if possible
+                const pageTitle = document.getElementById('page-title');
+                if (pageTitle) {
+                    pageTitle.textContent = sectionName.charAt(0).toUpperCase() + sectionName.slice(1);
+                }
+            }
+        }
+    }
 
     // Public API
     return {
-        init: init
+        init: init,
+        navigateTo: navigateTo
     };
 })();

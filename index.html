@@ -6,10 +6,22 @@
     <title>Concierge Editor - Restaurant Management System</title>
     <link rel="stylesheet" href="css/normalize.css">
     <link rel="stylesheet" href="css/styles.css">
+    <link rel="stylesheet" href="css/components.css">
+    <link rel="stylesheet" href="css/restaurant-section.css">
+    <!-- Add Inter font as specified in UI spec -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- Add JetBrains Mono for code or monospaced elements -->
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <!-- Material Icons as specified in UI spec -->
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    <!-- Keep Font Awesome for backwards compatibility -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Add theme color and dark mode support -->
+    <meta name="theme-color" content="#7c3aed">
+    <meta name="color-scheme" content="light dark">
 </head>
 <body>
     <div class="app-container">
@@ -89,7 +101,7 @@
                         <button type="submit"><i class="fas fa-search"></i></button>
                     </form>
                     <div class="actions">
-                        <button class="btn btn-primary" id="add-restaurant">
+                        <button class="btn btn-primary" id="global-add-restaurant">
                             <i class="fas fa-plus"></i> New Restaurant
                         </button>
                         <button class="btn btn-icon"><i class="fas fa-bell"></i></button>
@@ -181,107 +193,57 @@
                 <!-- Restaurants Section -->
                 <section id="restaurants" class="content-section">
                     <div class="section-header">
-                        <h3>Restaurant Management</h3>
+                        <div class="section-title">
+                            <h2>Restaurants</h2>
+                            <span class="section-subtitle">Manage your restaurant collection</span>
+                        </div>
                         <div class="header-actions">
-                            <div class="search-filter">
-                                <select id="filter-restaurants">
-                                    <option value="all">All Restaurants</option>
-                                    <option value="no-concepts">Without Concepts</option>
-                                    <option value="new">Recently Added</option>
-                                </select>
-                                <select id="sort-restaurants">
-                                    <option value="name-asc">Name (A-Z)</option>
-                                    <option value="name-desc">Name (Z-A)</option>
-                                    <option value="date-desc">Newest First</option>
-                                    <option value="date-asc">Oldest First</option>
-                                </select>
-                                <select id="status-filter">
-                                    <option value="all">All Statuses</option>
-                                    <option value="draft">Draft</option>
-                                    <option value="revised">Revised</option>
-                                    <option value="production">Production</option>
-                                    <option value="archived">Archived</option>
-                                </select>
-                            </div>
-                            <button class="btn btn-icon" id="advanced-search-btn" title="Advanced Search">
-                                <i class="fas fa-filter"></i>
-                            </button>
-                            <div class="view-toggle">
-                                <button class="btn btn-icon view-toggle-btn" title="Grid View">
-                                    <i class="fas fa-th"></i>
-                                </button>
-                                <button class="btn btn-icon view-toggle-btn active" title="List View">
-                                    <i class="fas fa-th-list"></i>
-                                </button>
-                                <button class="btn btn-icon view-toggle-btn" title="Table View">
-                                    <i class="fas fa-table"></i>
-                                </button>
-                            </div>
-                            <button class="btn btn-primary" id="add-restaurant-btn">
+                            <button class="btn btn-primary" id="section-add-restaurant">
                                 <i class="fas fa-plus"></i> Add Restaurant
                             </button>
                         </div>
                     </div>
 
-                    <div class="bulk-actions">
-                        <div class="select-all-container">
-                            <label>
-                                <input type="checkbox" id="select-all-restaurants"> Select All
-                            </label>
-                            <span id="selected-count" class="selected-counter"></span>
-                        </div>
-                        <div class="bulk-buttons">
-                            <button class="btn btn-secondary" id="bulk-tag" disabled>
-                                <i class="fas fa-tag"></i> Tag Selected
-                            </button>
-                            <button class="btn btn-secondary" id="export-data" disabled>
-                                <i class="fas fa-file-export"></i> Export Selected
-                            </button>
-                            <button class="btn btn-danger" id="bulk-delete" disabled>
-                                <i class="fas fa-trash"></i> Delete Selected
-                            </button>
-                        </div>
-                    </div>
-
-                    <div id="advanced-search-panel" class="advanced-search">
-                        <div class="search-panel-header">
-                            <h4>Advanced Search</h4>
+                    <!-- Advanced Search Panel - Initially Hidden -->
+                    <div id="advanced-search-panel" class="advanced-search-panel">
+                        <div class="panel-header">
+                            <h3>Advanced Search</h3>
                             <button class="btn btn-icon close-advanced-search">
                                 <i class="fas fa-times"></i>
                             </button>
                         </div>
                         <form id="advanced-search-form">
-                            <div class="search-row">
-                                <div class="search-field">
+                            <div class="form-row">
+                                <div class="form-group">
                                     <label for="search-name">Restaurant Name</label>
-                                    <input type="text" id="search-name" placeholder="Search by name">
+                                    <input type="text" id="search-name" placeholder="Search by name...">
                                 </div>
-                                <div class="search-field">
+                                <div class="form-group">
                                     <label for="search-curator">Curator</label>
                                     <select id="search-curator">
-                                        <option value="">Any Curator</option>
+                                        <option value="">Any curator</option>
                                     </select>
                                 </div>
                             </div>
-                            <div class="search-row">
-                                <div class="search-field">
+                            <div class="form-row">
+                                <div class="form-group">
                                     <label for="search-concept">Concept</label>
                                     <select id="search-concept">
-                                        <option value="">Any Concept</option>
+                                        <option value="">Any concept</option>
                                     </select>
                                 </div>
-                                <div class="search-field">
-                                    <label for="search-date-from">Added Between</label>
+                                <div class="form-group">
+                                    <label for="search-date-from">Date Range</label>
                                     <div class="date-range">
-                                        <input type="date" id="search-date-from">
-                                        <span>to</span>
-                                        <input type="date" id="search-date-to">
+                                        <input type="date" id="search-date-from" placeholder="From">
+                                        <span class="date-separator">to</span>
+                                        <input type="date" id="search-date-to" placeholder="To">
                                     </div>
                                 </div>
                             </div>
-                            <div class="search-row">
-                                <div class="search-field">
-                                    <label for="search-status">Status</label>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label>Status</label>
                                     <div class="checkbox-group">
                                         <label><input type="checkbox" name="status" value="draft" checked> Draft</label>
                                         <label><input type="checkbox" name="status" value="revised" checked> Revised</label>
@@ -289,36 +251,92 @@
                                         <label><input type="checkbox" name="status" value="archived"> Archived</label>
                                     </div>
                                 </div>
-                                <div class="search-field">
-                                    <label for="search-content">Content</label>
+                                <div class="form-group">
+                                    <label>Content Filters</label>
                                     <div class="checkbox-group">
-                                        <label><input type="checkbox" name="has_description" checked> Has description</label>
-                                        <label><input type="checkbox" name="has_transcription" checked> Has transcription</label>
-                                        <label><input type="checkbox" name="has_images" checked> Has images</label>
-                                        <label><input type="checkbox" name="has_location" checked> Has location</label>
+                                        <label><input type="checkbox" name="has_description"> Has description</label>
+                                        <label><input type="checkbox" name="has_transcription"> Has transcription</label>
+                                        <label><input type="checkbox" name="has_images"> Has images</label>
+                                        <label><input type="checkbox" name="has_location"> Has location</label>
                                     </div>
                                 </div>
                             </div>
-                            <div class="search-actions">
-                                <button type="button" class="btn btn-secondary" id="reset-search">
-                                    Reset
-                                </button>
-                                <button type="submit" class="btn btn-primary">
-                                    <i class="fas fa-search"></i> Search
-                                </button>
+                            <div class="form-actions">
+                                <button type="button" id="reset-search" class="btn btn-secondary">Reset</button>
+                                <button type="submit" class="btn btn-primary">Search</button>
                             </div>
                         </form>
                     </div>
 
-                    <div class="results-info">
-                        <span id="restaurant-count">0 restaurants</span>
+                    <div class="filter-toolbar">
+                        <div class="toolbar-section">
+                            <div class="view-toggle">
+                                <button class="view-toggle-btn" data-view="grid" title="Grid View">
+                                    <i class="fas fa-th-large"></i>
+                                </button>
+                                <button class="view-toggle-btn" data-view="list" title="List View">
+                                    <i class="fas fa-list"></i>
+                                </button>
+                                <button class="view-toggle-btn" data-view="table" title="Table View">
+                                    <i class="fas fa-table"></i>
+                                </button>
+                            </div>
+                            <button id="advanced-search-btn" class="btn btn-sm btn-secondary">
+                                <i class="fas fa-filter"></i> Advanced Search
+                            </button>
+                            <div id="restaurant-count" class="item-count">0 restaurants</div>
+                        </div>
+
+                        <div class="toolbar-section">
+                            <div class="filter-group">
+                                <select id="status-filter" aria-label="Filter by status">
+                                    <option value="all">All statuses</option>
+                                    <option value="draft">Draft</option>
+                                    <option value="revised">Revised</option>
+                                    <option value="production">Production</option>
+                                    <option value="archived">Archived</option>
+                                </select>
+                                <select id="filter-restaurants" aria-label="Filter restaurants">
+                                    <option value="all">All restaurants</option>
+                                    <option value="new">Added in last week</option>
+                                    <option value="no-concepts">No concepts</option>
+                                </select>
+                                <select id="sort-restaurants" aria-label="Sort restaurants">
+                                    <option value="name-asc">Name (A-Z)</option>
+                                    <option value="name-desc">Name (Z-A)</option>
+                                    <option value="date-desc">Newest first</option>
+                                    <option value="date-asc">Oldest first</option>
+                                    <option value="curator-asc">Curator (A-Z)</option>
+                                    <option value="curator-desc">Curator (Z-A)</option>
+                                </select>
+                            </div>
+                        </div>
                     </div>
 
-                    <div id="restaurant-list" class="restaurant-grid grid-view">
-                        <!-- Restaurant cards will be populated by JavaScript -->
+                    <div class="bulk-actions">
+                        <div class="selection-info">
+                            <span><span id="selected-count">0</span> restaurants selected</span>
+                            <button class="btn-text clear-selection">Clear selection</button>
+                        </div>
+                        <div class="bulk-action-buttons">
+                            <button id="bulk-delete" class="bulk-action-btn btn-danger disabled" disabled>
+                                <i class="fas fa-trash-alt"></i> Delete Selected
+                            </button>
+                            <button id="bulk-export" class="bulk-action-btn btn-secondary disabled" disabled>
+                                <i class="fas fa-file-export"></i> Export Selected
+                            </button>
+                        </div>
+                    </div>
+
+                    <div id="restaurant-list" class="restaurant-grid">
+                        <!-- Restaurant items will be dynamically inserted here by JavaScript -->
+                    </div>
+
+                    <div id="pagination-container" class="pagination-controls">
+                        <!-- Pagination will be inserted by JavaScript -->
                     </div>
                 </section>
-
+                
                 <!-- Restaurant Detail Section -->
                 <section id="restaurant-detail" class="content-section">
                     <div class="detail-header-placeholder"></div>
@@ -662,9 +680,6 @@
         </main>
     </div>
 
-    <!-- Hidden file input for import -->
-    <input type="file" id="import-file" accept=".json,.zip" style="display:none;">
-
     <!-- Library Scripts -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
@@ -688,5 +703,6 @@
     
     <!-- Main Application Script -->
     <script src="js/main.js"></script>
+    <script src="js/restaurant-ui.js"></script>
 </body>
 </html>
