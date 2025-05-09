@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - Concierge Editor</title>
+    <link rel="stylesheet" href="../css/main.css">
+    <link rel="stylesheet" href="../css/dashboard.css">
+    <!-- Chart.js library for visualizations -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+</head>
+<body>
+    <header class="main-header">
+        <div class="container">
+            <h1>Dashboard</h1>
+            <nav class="main-nav">
+                <ul>
+                    <li><a href="../index.html">Home</a></li>
+                    <li><a href="#" class="active">Dashboard</a></li>
+                    <li><a href="../search/index.html">Search</a></li>
+                    <li><a href="../restaurant-editor.html">Restaurant Editor</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+
+    <main class="container">
+        <section class="dashboard-controls">
+            <div class="date-filter">
+                <label for="timeframe">Timeframe:</label>
+                <select id="timeframe">
+                    <option value="7days">Last 7 days</option>
+                    <option value="30days" selected>Last 30 days</option>
+                    <option value="90days">Last 90 days</option>
+                    <option value="12months">Last 12 months</option>
+                    <option value="all">All time</option>
+                </select>
+            </div>
+            <button id="refreshDashboard" class="btn">Refresh Dashboard</button>
+        </section>
+
+        <div class="dashboard-grid">
+            <div class="dashboard-item" id="restaurantCount">
+                <h3>Restaurant Count</h3>
+                <div class="loading">Loading...</div>
+                <div class="visualization"></div>
+            </div>
+            
+            <div class="dashboard-item" id="conceptDistribution">
+                <h3>Concept Distribution</h3>
+                <div class="loading">Loading...</div>
+                <div class="visualization"></div>
+            </div>
+            
+            <div class="dashboard-item" id="locationMap">
+                <h3>Location Map</h3>
+                <div class="loading">Loading...</div>
+                <div class="visualization map-container"></div>
+            </div>
+            
+            <div class="dashboard-item" id="curatorActivity">
+                <h3>Curator Activity</h3>
+                <div class="loading">Loading...</div>
+                <div class="visualization"></div>
+            </div>
+        </div>
+
+        <div class="status-bar">
+            <p id="statusMessage">Database status: <span id="dbStatus">Connecting...</span></p>
+        </div>
+    </main>
+
+    <footer class="main-footer">
+        <div class="container">
+            <p>&copy; 2023 Concierge Editor. All rights reserved.</p>
+        </div>
+    </footer>
+
+    <!-- Core library scripts -->
+    <script src="../js/indexedDB-database.js"></script>
+    <script src="../js/concierge-data.js"></script>
+    <script src="../js/restaurant-model.js"></script>
+    
+    <!-- Dashboard specific scripts -->
+    <script src="../js/services/dashboard-service.js"></script>
+    <script src="js/dashboard-controller.js"></script>
+    <script src="js/visualization/restaurant-count-view.js"></script>
+    <script src="js/visualization/concept-distribution-view.js"></script>
+    <script src="js/visualization/location-map-view.js"></script>
+    <script src="js/visualization/curator-activity-view.js"></script>
+</body>
+</html>

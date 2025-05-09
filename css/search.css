@@ -1,0 +1,244 @@
+/**
+ * search.css
+ * 
+ * Purpose: Styles specific to the Search section of Concierge Editor
+ * Handles layout and appearance of search components, filters, and result display
+ */
+
+/* Main search layout */
+.search-section {
+    display: grid;
+    grid-template-columns: 300px 1fr;
+    gap: 20px;
+}
+
+/* Search panel with filters */
+.search-panel {
+    background: white;
+    border-radius: 5px;
+    padding: 20px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+}
+
+.search-panel h3 {
+    margin-top: 0;
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 10px;
+    margin-bottom: 15px;
+}
+
+.search-form {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.form-group {
+    margin-bottom: 15px;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: 500;
+}
+
+.advanced-filters {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid var(--border-color);
+}
+
+.advanced-filters h4 {
+    margin-top: 0;
+    margin-bottom: 10px;
+    font-size: 1rem;
+}
+
+.search-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 20px;
+}
+
+/* Search results styling */
+.search-results {
+    background: white;
+    border-radius: 5px;
+    padding: 20px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    position: relative; /* For loader positioning */
+}
+
+.results-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.results-header h3 {
+    margin: 0;
+}
+
+.results-actions {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.results-container {
+    position: relative;
+    min-height: 300px;
+}
+
+/* Loader styling */
+.loader {
+    border: 5px solid #f3f3f3;
+    border-top: 5px solid #3498db;
+    border-radius: 50%;
+    width: 30px;
+    height: 30px;
+    animation: spin 1s linear infinite;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    margin-top: -15px;
+    margin-left: -15px;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* No results message */
+.no-results {
+    text-align: center;
+    padding: 50px 0;
+    color: #6c757d;
+    font-style: italic;
+}
+
+/* Table styles for search results */
+.search-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 20px;
+}
+
+.search-table th, 
+.search-table td {
+    padding: 10px;
+    text-align: left;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.search-table th {
+    background-color: #f8f9fa;
+    font-weight: 600;
+    cursor: pointer;
+    user-select: none;
+}
+
+.search-table th:hover {
+    background-color: #e9ecef;
+}
+
+.search-table td img {
+    max-width: 40px;
+    max-height: 40px;
+    border-radius: 3px;
+}
+
+.search-table tr:hover {
+    background-color: #f8f9fa;
+}
+
+.search-table .sort-indicator:after {
+    content: '\25BC'; /* Down triangle */
+    display: inline-block;
+    margin-left: 5px;
+    font-size: 0.8em;
+}
+
+.search-table .sort-indicator.asc:after {
+    content: '\25B2'; /* Up triangle */
+}
+
+/* Pagination styles */
+.pagination {
+    display: flex;
+    justify-content: center;
+    margin-top: 20px;
+    gap: 5px;
+}
+
+.pagination button {
+    padding: 6px 12px;
+    border: 1px solid var(--border-color);
+    background: #ffffff;
+    color: var(--secondary-color);
+    cursor: pointer;
+    border-radius: 3px;
+}
+
+.pagination button:hover {
+    background: #f8f9fa;
+}
+
+.pagination button.active {
+    background: var(--secondary-color);
+    color: white;
+    border-color: var(--secondary-color);
+}
+
+.pagination button:disabled {
+    color: #cccccc;
+    cursor: not-allowed;
+    background: #f8f9fa;
+}
+
+/* Status bar */
+.status-bar {
+    background: var(--light-color);
+    padding: 10px;
+    border-radius: 5px;
+    margin-top: 20px;
+    border: 1px solid var(--border-color);
+}
+
+.status-bar #dbStatus {
+    font-weight: bold;
+}
+
+.status-bar .connected {
+    color: var(--success-color);
+}
+
+.status-bar .error {
+    color: var(--danger-color);
+}
+
+/* Responsive design for smaller screens */
+@media screen and (max-width: 768px) {
+    .search-section {
+        grid-template-columns: 1fr;
+    }
+    
+    .results-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 10px;
+    }
+    
+    .results-actions {
+        flex-direction: column;
+        align-items: flex-start;
+        width: 100%;
+    }
+    
+    .results-actions select {
+        width: 100%;
+    }
+}

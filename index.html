@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Concierge Editor</title>
+    <link rel="stylesheet" href="css/main.css">
+</head>
+<body>
+    <header class="main-header">
+        <div class="container">
+            <h1>Concierge Editor</h1>
+            <nav class="main-nav">
+                <ul>
+                    <li><a href="dashboard/index.html">Dashboard</a></li>
+                    <li><a href="search/index.html">Search</a></li>
+                    <li><a href="restaurant-editor.html">Restaurant Editor</a></li>
+                    <li><a href="test-interface.html">Test Interface</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+
+    <main class="container">
+        <section class="welcome-section">
+            <h2>Welcome to Concierge Editor</h2>
+            <p>Manage restaurant data with our easy-to-use editor platform.</p>
+            
+            <div class="feature-cards">
+                <div class="card">
+                    <h3>Dashboard</h3>
+                    <p>View analytics and visualizations for your restaurant data.</p>
+                    <a href="dashboard/index.html" class="btn">Open Dashboard</a>
+                </div>
+                <div class="card">
+                    <h3>Search</h3>
+                    <p>Search and filter through your restaurant database with powerful tools.</p>
+                    <a href="search/index.html" class="btn">Open Search</a>
+                </div>
+                <div class="card">
+                    <h3>Restaurant Editor</h3>
+                    <p>Create and manage restaurant entries with our fully-featured editor.</p>
+                    <a href="restaurant-editor.html" class="btn">Open Editor</a>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer class="main-footer">
+        <div class="container">
+            <p>&copy; 2023 Concierge Editor. All rights reserved.</p>
+        </div>
+    </footer>
+
+    <script src="js/indexedDB-database.js"></script>
+    <script src="js/concierge-data.js"></script>
+    <script src="js/restaurant-model.js"></script>
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', async function() {
+            try {
+                await ConciergeData.initialize();
+                console.log('Database initialized successfully');
+            } catch (error) {
+                console.error('Error initializing database:', error);
+            }
+        });
+    </script>
+</body>
+</html>
