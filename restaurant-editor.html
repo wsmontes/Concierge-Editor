@@ -1,0 +1,1366 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Concierge Editor - Restaurant Editor</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            padding: 20px;
+            color: #333;
+            background-color: #f8f9fa;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        header {
+            background: #343a40;
+            color: white;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        h1, h2, h3 {
+            margin-top: 0;
+        }
+        .card {
+            background: white;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .flex-container {
+            display: flex;
+            gap: 20px;
+        }
+        .flex-item {
+            flex: 1;
+        }
+        button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 3px;
+            cursor: pointer;
+            margin: 5px 0;
+            transition: background 0.3s;
+        }
+        button:hover {
+            background: #45a049;
+        }
+        button.danger {
+            background: #dc3545;
+        }
+        button.danger:hover {
+            background: #c82333;
+        }
+        button.info {
+            background: #17a2b8;
+        }
+        button.info:hover {
+            background: #138496;
+        }
+        button.secondary {
+            background: #6c757d;
+        }
+        button.secondary:hover {
+            background: #5a6268;
+        }
+        button:disabled {
+            background: #cccccc;
+            cursor: not-allowed;
+        }
+        textarea, select, input[type="text"], input[type="number"], input[type="url"] {
+            width: 100%;
+            padding: 10px;
+            margin: 5px 0;
+            border: 1px solid #ced4da;
+            border-radius: 3px;
+            box-sizing: border-box;
+        }
+        textarea {
+            min-height: 100px;
+            font-family: inherit;
+        }
+        .status-bar {
+            padding: 10px;
+            margin-bottom: 20px;
+            border-radius: 3px;
+            background: #e9ecef;
+            font-weight: bold;
+        }
+        .success-status {
+            background: #d4edda;
+            color: #155724;
+        }
+        .error-status {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        .warning-status {
+            background: #fff3cd;
+            color: #856404;
+        }
+        .toast {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: rgba(33, 37, 41, 0.9);
+            color: white;
+            padding: 15px 20px;
+            border-radius: 5px;
+            display: none;
+            z-index: 1000;
+            animation: fadeIn 0.3s;
+            max-width: 300px;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 1rem;
+        }
+        th, td {
+            padding: 0.75rem;
+            text-align: left;
+            border-bottom: 1px solid #dee2e6;
+        }
+        th {
+            background-color: #e9ecef;
+        }
+        tr:hover {
+            background-color: #f8f9fa;
+        }
+        .action-buttons {
+            display: flex;
+            gap: 5px;
+        }
+        .badge {
+            display: inline-block;
+            padding: 0.25em 0.6em;
+            font-size: 75%;
+            font-weight: 700;
+            border-radius: 10rem;
+            margin-right: 3px;
+        }
+        .badge-primary {
+            color: #fff;
+            background-color: #007bff;
+        }
+        .badge-secondary {
+            color: #fff;
+            background-color: #6c757d;
+        }
+        .tab-container {
+            margin-top: 20px;
+        }
+        .tab-buttons {
+            display: flex;
+            border-bottom: 1px solid #dee2e6;
+            margin-bottom: 20px;
+        }
+        .tab-button {
+            padding: 10px 15px;
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-bottom: none;
+            border-radius: 5px 5px 0 0;
+            margin-right: 5px;
+            cursor: pointer;
+        }
+        .tab-button.active {
+            background: white;
+            border-bottom: 1px solid white;
+            margin-bottom: -1px;
+            font-weight: bold;
+        }
+        .tab-content {
+            display: none;
+            padding: 15px;
+            background: white;
+            border: 1px solid #dee2e6;
+            border-top: none;
+            border-radius: 0 0 5px 5px;
+        }
+        .tab-content.active {
+            display: block;
+        }
+        .required-field::after {
+            content: " *";
+            color: #dc3545;
+        }
+        .photo-preview {
+            width: 200px;
+            height: 150px;
+            object-fit: cover;
+            border-radius: 4px;
+            margin: 5px;
+        }
+        .photo-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 10px;
+        }
+        .photo-card {
+            position: relative;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 5px;
+            width: 210px;
+        }
+        .photo-actions {
+            margin-top: 5px;
+            display: flex;
+            justify-content: space-between;
+        }
+        .loader {
+            border: 5px solid #f3f3f3;
+            border-top: 5px solid #3498db;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 2s linear infinite;
+            margin: 20px auto;
+            display: none;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Concierge Editor - Restaurant Editor</h1>
+            <p>Create, edit and manage restaurant data</p>
+        </header>
+
+        <!-- Status bar -->
+        <div class="status-bar" id="statusBar">Database status: Not connected</div>
+        
+        <!-- Restaurant listing panel -->
+        <div class="card">
+            <h2>Restaurants</h2>
+            <div class="flex-container">
+                <div class="flex-item">
+                    <button id="btnRefreshList">Refresh List</button>
+                    <button id="btnAddNew" class="info">Add New Restaurant</button>
+                </div>
+                <div class="flex-item">
+                    <input type="text" id="searchInput" placeholder="Search restaurants...">
+                </div>
+            </div>
+            
+            <div id="loader" class="loader"></div>
+            <table id="restaurantsTable">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Name</th>
+                        <th>Curator</th>
+                        <th>Concepts</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="restaurantsList">
+                    <!-- Restaurant list will be populated here -->
+                </tbody>
+            </table>
+            <p id="noRestaurantsMessage" style="display: none;">No restaurants found. Add one to get started.</p>
+        </div>
+
+        <!-- Editor panel (hidden by default) -->
+        <div id="editorPanel" class="card" style="display: none;">
+            <h2 id="editorTitle">Add New Restaurant</h2>
+            
+            <div class="tab-container">
+                <div class="tab-buttons">
+                    <div class="tab-button active" data-tab="basic">Basic Info</div>
+                    <div class="tab-button" data-tab="concepts">Concepts</div>
+                    <div class="tab-button" data-tab="locations">Locations</div>
+                    <div class="tab-button" data-tab="photos">Photos</div>
+                </div>
+                
+                <!-- Basic Info Tab -->
+                <div id="basic" class="tab-content active">
+                    <input type="hidden" id="restaurantId">
+                    <div class="form-group">
+                        <label for="restaurantName" class="required-field">Name:</label>
+                        <input type="text" id="restaurantName" placeholder="Restaurant Name" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="curatorId" class="required-field">Curator ID:</label>
+                        <input type="number" id="curatorId" placeholder="Curator ID" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="description">Description:</label>
+                        <textarea id="description" placeholder="Restaurant description"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="websiteUrl">Website URL:</label>
+                        <input type="url" id="websiteUrl" placeholder="https://example.com">
+                    </div>
+                </div>
+                
+                <!-- Concepts Tab -->
+                <div id="concepts" class="tab-content">
+                    <h3>Assigned Concepts</h3>
+                    <div id="assignedConcepts">
+                        <p>No concepts assigned to this restaurant yet.</p>
+                    </div>
+                    
+                    <h3>Add Concept</h3>
+                    <div class="flex-container">
+                        <div class="flex-item">
+                            <label for="conceptCategory">Category:</label>
+                            <select id="conceptCategory">
+                                <option value="">Select category...</option>
+                                <!-- Categories will be populated here -->
+                            </select>
+                        </div>
+                        <div class="flex-item">
+                            <label for="conceptValue">Value:</label>
+                            <select id="conceptValue">
+                                <option value="">Select value...</option>
+                                <!-- Values will be populated here -->
+                            </select>
+                        </div>
+                        <div>
+                            <label>&nbsp;</label>
+                            <button id="btnAddConcept">Add Concept</button>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Locations Tab -->
+                <div id="locations" class="tab-content">
+                    <h3>Restaurant Locations</h3>
+                    <table id="locationsTable">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Address</th>
+                                <th>City</th>
+                                <th>State</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="locationsList">
+                            <!-- Locations will be populated here -->
+                        </tbody>
+                    </table>
+                    <p id="noLocationsMessage" style="display: none;">No locations for this restaurant.</p>
+                    
+                    <h3>Add Location</h3>
+                    <div class="form-group">
+                        <input type="hidden" id="locationId">
+                        <div class="flex-container">
+                            <div class="flex-item">
+                                <label for="address" class="required-field">Address:</label>
+                                <input type="text" id="address" placeholder="Street address" required>
+                            </div>
+                            <div class="flex-item">
+                                <label for="city" class="required-field">City:</label>
+                                <input type="text" id="city" placeholder="City" required>
+                            </div>
+                        </div>
+                        <div class="flex-container">
+                            <div class="flex-item">
+                                <label for="state" class="required-field">State:</label>
+                                <input type="text" id="state" placeholder="State" required>
+                            </div>
+                            <div class="flex-item">
+                                <label for="zipCode" class="required-field">ZIP Code:</label>
+                                <input type="text" id="zipCode" placeholder="ZIP Code" required>
+                            </div>
+                        </div>
+                        <div class="flex-container">
+                            <div class="flex-item">
+                                <label for="latitude">Latitude:</label>
+                                <input type="text" id="latitude" placeholder="Latitude (optional)">
+                            </div>
+                            <div class="flex-item">
+                                <label for="longitude">Longitude:</label>
+                                <input type="text" id="longitude" placeholder="Longitude (optional)">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <button id="btnAddLocation">Add Location</button>
+                            <button id="btnCancelLocation" class="secondary">Cancel</button>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Photos Tab -->
+                <div id="photos" class="tab-content">
+                    <h3>Restaurant Photos</h3>
+                    <div id="photosList" class="photo-container">
+                        <!-- Photos will be populated here -->
+                    </div>
+                    <p id="noPhotosMessage" style="display: none;">No photos for this restaurant.</p>
+                    
+                    <h3>Add Photo</h3>
+                    <div class="form-group">
+                        <label for="photoUrl" class="required-field">Photo URL:</label>
+                        <input type="url" id="photoUrl" placeholder="https://example.com/image.jpg" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="photoCaption">Caption:</label>
+                        <input type="text" id="photoCaption" placeholder="Photo caption">
+                    </div>
+                    <div class="form-group">
+                        <label for="photoCredit">Credit:</label>
+                        <input type="text" id="photoCredit" placeholder="Photo credit/attribution">
+                    </div>
+                    <div class="form-group">
+                        <button id="btnAddPhoto">Add Photo</button>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="form-actions" style="margin-top: 20px; border-top: 1px solid #dee2e6; padding-top: 15px;">
+                <button id="btnSave">Save Restaurant</button>
+                <button id="btnCancel" class="secondary">Cancel</button>
+                <button id="btnDelete" class="danger" style="float: right; display: none;">Delete Restaurant</button>
+            </div>
+        </div>
+
+        <!-- Toast notification element -->
+        <div id="toast" class="toast"></div>
+    </div>
+
+    <!-- Load required scripts in the correct order -->
+    <script src="js/indexedDB-database.js"></script>
+    <script src="js/concierge-data.js"></script>
+    <script src="js/restaurant-model.js"></script>
+
+    <script>
+        /**
+         * Restaurant Editor JavaScript
+         * 
+         * Provides a complete interface for creating, editing, and managing restaurant data
+         * in the Concierge Editor application. Only connects to the concierge-data module.
+         */
+        document.addEventListener('DOMContentLoaded', async function() {
+            // ====== State Management ======
+            const state = {
+                editMode: false,
+                currentRestaurantId: null,
+                currentLocationId: null,
+                restaurants: [],
+                concepts: [],
+                categories: [],
+                editingLocation: false
+            };
+            
+            // ====== Utility Functions ======
+            function showLoader() {
+                document.getElementById('loader').style.display = 'block';
+            }
+            
+            function hideLoader() {
+                document.getElementById('loader').style.display = 'none';
+            }
+            
+            function updateStatusBar(message, status) {
+                const statusBar = document.getElementById('statusBar');
+                statusBar.textContent = message;
+                statusBar.className = 'status-bar';
+                
+                if (status) {
+                    statusBar.classList.add(`${status}-status`);
+                }
+            }
+            
+            function showToast(message, duration = 3000) {
+                const toast = document.getElementById('toast');
+                toast.textContent = message;
+                toast.style.display = 'block';
+                
+                setTimeout(() => {
+                    toast.style.display = 'none';
+                }, duration);
+            }
+            
+            function setActiveTab(tabId) {
+                // Hide all tab contents
+                document.querySelectorAll('.tab-content').forEach(tab => {
+                    tab.classList.remove('active');
+                });
+                
+                // Deactivate all tab buttons
+                document.querySelectorAll('.tab-button').forEach(button => {
+                    button.classList.remove('active');
+                });
+                
+                // Activate the selected tab and button
+                document.getElementById(tabId).classList.add('active');
+                document.querySelector(`.tab-button[data-tab="${tabId}"]`).classList.add('active');
+            }
+            
+            // ====== Database Initialization ======
+            async function initializeDatabase() {
+                try {
+                    updateStatusBar('Connecting to database...', 'warning');
+                    await ConciergeData.initialize();
+                    updateStatusBar('Database connected', 'success');
+                    
+                    // Load initial data
+                    await refreshRestaurantList();
+                    await loadCategories();
+                } catch (error) {
+                    console.error('Database initialization error:', error);
+                    updateStatusBar(`Database error: ${error.message}`, 'error');
+                }
+            }
+            
+            // ====== Restaurant CRUD Operations ======
+            async function refreshRestaurantList() {
+                try {
+                    showLoader();
+                    const restaurantModel = ConciergeData.getEntityModel('restaurant');
+                    if (!restaurantModel) {
+                        throw new Error('Restaurant model not found');
+                    }
+                    
+                    // Get all restaurants with basic details
+                    state.restaurants = await restaurantModel.restaurants.getAll();
+                    
+                    const tableBody = document.getElementById('restaurantsList');
+                    tableBody.innerHTML = '';
+                    
+                    if (state.restaurants.length === 0) {
+                        document.getElementById('noRestaurantsMessage').style.display = 'block';
+                        document.getElementById('restaurantsTable').style.display = 'none';
+                    } else {
+                        document.getElementById('noRestaurantsMessage').style.display = 'none';
+                        document.getElementById('restaurantsTable').style.display = 'table';
+                        
+                        for (const restaurant of state.restaurants) {
+                            // Get associated concepts for this restaurant
+                            let conceptsHtml = '';
+                            try {
+                                // Check if restaurantConcepts exists before trying to use it
+                                if (restaurantModel.restaurantConcepts && typeof restaurantModel.restaurantConcepts.getByRestaurantId === 'function') {
+                                    const concepts = await restaurantModel.restaurantConcepts.getByRestaurantId(restaurant.id);
+                                    if (concepts && concepts.length > 0) {
+                                        const conceptDetails = await Promise.all(
+                                            concepts.map(async rc => {
+                                                const concept = await restaurantModel.concepts.getById(rc.conceptId);
+                                                return concept ? concept : null;
+                                            })
+                                        );
+                                        
+                                        conceptsHtml = conceptDetails.filter(c => c !== null)
+                                            .map(concept => 
+                                                `<span class="badge badge-primary">${concept.category}: ${concept.value}</span>`
+                                            ).join(' ');
+                                    }
+                                } else {
+                                    console.warn('restaurantConcepts is not properly defined in the restaurant model');
+                                    conceptsHtml = '<em>Concepts feature not available</em>';
+                                }
+                            } catch (error) {
+                                console.error(`Error getting concepts for restaurant ${restaurant.id}:`, error);
+                                conceptsHtml = '<em>Error loading concepts</em>';
+                            }
+                            
+                            // Get curator info
+                            let curatorName = restaurant.curatorId;
+                            try {
+                                const curator = await restaurantModel.curators.getById(restaurant.curatorId);
+                                if (curator) {
+                                    curatorName = curator.name || curator.curatorId;
+                                }
+                            } catch (error) {
+                                console.error(`Error getting curator for restaurant ${restaurant.id}:`, error);
+                            }
+                            
+                            const row = document.createElement('tr');
+                            row.innerHTML = `
+                                <td>${restaurant.id}</td>
+                                <td>${restaurant.name}</td>
+                                <td>${curatorName}</td>
+                                <td>${conceptsHtml || '<em>No concepts</em>'}</td>
+                                <td>
+                                    <div class="action-buttons">
+                                        <button class="btn-edit" data-id="${restaurant.id}">Edit</button>
+                                        <button class="danger btn-delete" data-id="${restaurant.id}">Delete</button>
+                                    </div>
+                                </td>
+                            `;
+                            tableBody.appendChild(row);
+                        }
+                        
+                        // Add event listeners to buttons
+                        document.querySelectorAll('.btn-edit').forEach(btn => {
+                            btn.addEventListener('click', () => editRestaurant(parseInt(btn.dataset.id)));
+                        });
+                        
+                        document.querySelectorAll('.btn-delete').forEach(btn => {
+                            btn.addEventListener('click', () => deleteRestaurant(parseInt(btn.dataset.id)));
+                        });
+                    }
+                } catch (error) {
+                    console.error('Error refreshing restaurant list:', error);
+                    updateStatusBar(`Error loading restaurants: ${error.message}`, 'error');
+                } finally {
+                    hideLoader();
+                }
+            }
+            
+            async function loadCategories() {
+                try {
+                    const restaurantModel = ConciergeData.getEntityModel('restaurant');
+                    if (!restaurantModel) {
+                        throw new Error('Restaurant model not found');
+                    }
+                    
+                    const categories = await restaurantModel.concepts.getCategories();
+                    state.categories = categories;
+                    
+                    const categorySelect = document.getElementById('conceptCategory');
+                    categorySelect.innerHTML = '<option value="">Select category...</option>';
+                    
+                    categories.forEach(category => {
+                        const option = document.createElement('option');
+                        option.value = category;
+                        option.textContent = category;
+                        categorySelect.appendChild(option);
+                    });
+                } catch (error) {
+                    console.error('Error loading categories:', error);
+                    showToast(`Error loading concept categories: ${error.message}`, 5000);
+                }
+            }
+            
+            async function loadConceptValues(category) {
+                try {
+                    const restaurantModel = ConciergeData.getEntityModel('restaurant');
+                    if (!restaurantModel) {
+                        throw new Error('Restaurant model not found');
+                    }
+                    
+                    const concepts = await restaurantModel.concepts.getByCategory(category);
+                    state.concepts = concepts;
+                    
+                    const valueSelect = document.getElementById('conceptValue');
+                    valueSelect.innerHTML = '<option value="">Select value...</option>';
+                    
+                    concepts.forEach(concept => {
+                        const option = document.createElement('option');
+                        option.value = concept.id;
+                        option.textContent = concept.value;
+                        valueSelect.appendChild(option);
+                    });
+                } catch (error) {
+                    console.error(`Error loading concept values for ${category}:`, error);
+                    showToast(`Error loading concept values: ${error.message}`, 5000);
+                }
+            }
+            
+            function showEditorPanel(isEdit = false) {
+                state.editMode = isEdit;
+                document.getElementById('editorTitle').textContent = isEdit ? 'Edit Restaurant' : 'Add New Restaurant';
+                document.getElementById('editorPanel').style.display = 'block';
+                document.getElementById('btnDelete').style.display = isEdit ? 'block' : 'none';
+                
+                // Set focus to the restaurant name field
+                document.getElementById('restaurantName').focus();
+                
+                // Always start with the basic info tab
+                setActiveTab('basic');
+            }
+            
+            function hideEditorPanel() {
+                document.getElementById('editorPanel').style.display = 'none';
+                resetForm();
+            }
+            
+            function resetForm() {
+                document.getElementById('restaurantId').value = '';
+                document.getElementById('restaurantName').value = '';
+                document.getElementById('curatorId').value = '';
+                document.getElementById('description').value = '';
+                document.getElementById('websiteUrl').value = '';
+                document.getElementById('assignedConcepts').innerHTML = '<p>No concepts assigned to this restaurant yet.</p>';
+                document.getElementById('locationsList').innerHTML = '';
+                document.getElementById('photosList').innerHTML = '';
+                document.getElementById('noLocationsMessage').style.display = 'none';
+                document.getElementById('noPhotosMessage').style.display = 'none';
+                
+                state.currentRestaurantId = null;
+                state.currentLocationId = null;
+                state.editingLocation = false;
+                
+                // Reset location form
+                document.getElementById('locationId').value = '';
+                document.getElementById('address').value = '';
+                document.getElementById('city').value = '';
+                document.getElementById('state').value = '';
+                document.getElementById('zipCode').value = '';
+                document.getElementById('latitude').value = '';
+                document.getElementById('longitude').value = '';
+                
+                // Reset photo form
+                document.getElementById('photoUrl').value = '';
+                document.getElementById('photoCaption').value = '';
+                document.getElementById('photoCredit').value = '';
+            }
+            
+            async function saveRestaurant() {
+                try {
+                    const restaurantId = document.getElementById('restaurantId').value;
+                    const name = document.getElementById('restaurantName').value.trim();
+                    const curatorId = parseInt(document.getElementById('curatorId').value);
+                    const description = document.getElementById('description').value.trim();
+                    const websiteUrl = document.getElementById('websiteUrl').value.trim();
+                    
+                    if (!name) {
+                        showToast('Restaurant name is required', 3000);
+                        return;
+                    }
+                    
+                    if (isNaN(curatorId)) {
+                        showToast('Valid curator ID is required', 3000);
+                        return;
+                    }
+                    
+                    const restaurantModel = ConciergeData.getEntityModel('restaurant');
+                    if (!restaurantModel) {
+                        throw new Error('Restaurant model not found');
+                    }
+                    
+                    const restaurantData = {
+                        name,
+                        curatorId,
+                        description: description || undefined,
+                        websiteUrl: websiteUrl || undefined,
+                        timestamp: new Date().toISOString()
+                    };
+                    
+                    let newId;
+                    if (state.editMode && restaurantId) {
+                        // Update existing restaurant
+                        await restaurantModel.restaurants.update(
+                            parseInt(restaurantId),
+                            restaurantData
+                        );
+                        newId = parseInt(restaurantId);
+                        showToast('Restaurant updated successfully', 3000);
+                    } else {
+                        // Create new restaurant
+                        newId = await restaurantModel.restaurants.add(restaurantData);
+                        showToast('Restaurant created successfully', 3000);
+                    }
+                    
+                    await refreshRestaurantList();
+                    hideEditorPanel();
+                } catch (error) {
+                    console.error('Error saving restaurant:', error);
+                    showToast(`Error saving restaurant: ${error.message}`, 5000);
+                }
+            }
+            
+            async function editRestaurant(id) {
+                try {
+                    const restaurantModel = ConciergeData.getEntityModel('restaurant');
+                    if (!restaurantModel) {
+                        throw new Error('Restaurant model not found');
+                    }
+                    
+                    const restaurant = await restaurantModel.restaurants.getById(id);
+                    if (!restaurant) {
+                        throw new Error(`Restaurant with ID ${id} not found`);
+                    }
+                    
+                    // Set restaurant data to form
+                    document.getElementById('restaurantId').value = restaurant.id;
+                    document.getElementById('restaurantName').value = restaurant.name || '';
+                    document.getElementById('curatorId').value = restaurant.curatorId || '';
+                    document.getElementById('description').value = restaurant.description || '';
+                    document.getElementById('websiteUrl').value = restaurant.websiteUrl || '';
+                    
+                    // Set current restaurant ID in state
+                    state.currentRestaurantId = id;
+                    
+                    // Load restaurant-specific data
+                    await loadRestaurantConcepts(id);
+                    await loadRestaurantLocations(id);
+                    await loadRestaurantPhotos(id);
+                    
+                    showEditorPanel(true);
+                } catch (error) {
+                    console.error(`Error editing restaurant ${id}:`, error);
+                    showToast(`Error loading restaurant data: ${error.message}`, 5000);
+                }
+            }
+            
+            async function deleteRestaurant(id) {
+                if (!confirm(`Are you sure you want to delete this restaurant? This will also delete all associated data.`)) {
+                    return;
+                }
+                
+                try {
+                    const restaurantModel = ConciergeData.getEntityModel('restaurant');
+                    if (!restaurantModel) {
+                        throw new Error('Restaurant model not found');
+                    }
+                    
+                    // First delete all related data
+                    try {
+                        // Delete associated concepts
+                        const concepts = await restaurantModel.restaurantConcepts.getByRestaurantId(id);
+                        for (const concept of concepts) {
+                            await restaurantModel.restaurantConcepts.delete(concept.id);
+                        }
+                        
+                        // Delete associated locations
+                        const locations = await restaurantModel.restaurantLocations.getByRestaurantId(id);
+                        for (const location of locations) {
+                            await restaurantModel.restaurantLocations.delete(location.id);
+                        }
+                        
+                        // Delete associated photos
+                        const photos = await restaurantModel.restaurantPhotos.getByRestaurantId(id);
+                        for (const photo of photos) {
+                            await restaurantModel.restaurantPhotos.delete(photo.id);
+                        }
+                    } catch (error) {
+                        console.error(`Error deleting restaurant related data for ID ${id}:`, error);
+                    }
+                    
+                    // Then delete the restaurant itself
+                    await restaurantModel.restaurants.delete(id);
+                    
+                    showToast('Restaurant and all associated data deleted successfully');
+                    await refreshRestaurantList();
+                    
+                    // If we're currently editing this restaurant, close the editor
+                    if (state.currentRestaurantId === id) {
+                        hideEditorPanel();
+                    }
+                } catch (error) {
+                    console.error(`Error deleting restaurant ${id}:`, error);
+                    showToast(`Error deleting restaurant: ${error.message}`, 5000);
+                }
+            }
+            
+            // ====== Concept Operations ======
+            async function loadRestaurantConcepts(restaurantId) {
+                try {
+                    const restaurantModel = ConciergeData.getEntityModel('restaurant');
+                    if (!restaurantModel) {
+                        throw new Error('Restaurant model not found');
+                    }
+                    
+                    const restaurantConcepts = await restaurantModel.restaurantConcepts.getByRestaurantId(restaurantId);
+                    const conceptsDiv = document.getElementById('assignedConcepts');
+                    
+                    if (!restaurantConcepts || restaurantConcepts.length === 0) {
+                        conceptsDiv.innerHTML = '<p>No concepts assigned to this restaurant yet.</p>';
+                        return;
+                    }
+                    
+                    // Get full concept details for each assigned concept
+                    const conceptDetails = await Promise.all(
+                        restaurantConcepts.map(async rc => {
+                            try {
+                                const concept = await restaurantModel.concepts.getById(rc.conceptId);
+                                return {
+                                    relationId: rc.id,
+                                    conceptId: rc.conceptId,
+                                    category: concept ? concept.category : 'Unknown',
+                                    value: concept ? concept.value : 'Unknown'
+                                };
+                            } catch (error) {
+                                console.error(`Error getting concept ${rc.conceptId}:`, error);
+                                return {
+                                    relationId: rc.id,
+                                    conceptId: rc.conceptId,
+                                    category: 'Error',
+                                    value: 'Error loading concept'
+                                };
+                            }
+                        })
+                    );
+                    
+                    // Group concepts by category for better organization
+                    const groupedConcepts = {};
+                    conceptDetails.forEach(concept => {
+                        if (!groupedConcepts[concept.category]) {
+                            groupedConcepts[concept.category] = [];
+                        }
+                        groupedConcepts[concept.category].push(concept);
+                    });
+                    
+                    // Generate HTML for concept display
+                    let html = '';
+                    for (const category in groupedConcepts) {
+                        html += `<h4>${category}</h4><ul>`;
+                        groupedConcepts[category].forEach(concept => {
+                            html += `<li>
+                                ${concept.value} 
+                                <button class="danger btn-remove-concept" data-id="${concept.relationId}">Remove</button>
+                            </li>`;
+                        });
+                        html += `</ul>`;
+                    }
+                    
+                    conceptsDiv.innerHTML = html;
+                    
+                    // Add event listeners to remove buttons
+                    document.querySelectorAll('.btn-remove-concept').forEach(btn => {
+                        btn.addEventListener('click', () => removeConcept(parseInt(btn.dataset.id)));
+                    });
+                } catch (error) {
+                    console.error(`Error loading concepts for restaurant ${restaurantId}:`, error);
+                    document.getElementById('assignedConcepts').innerHTML = 
+                        `<p class="error-status">Error loading concepts: ${error.message}</p>`;
+                }
+            }
+            
+            async function addConceptToRestaurant() {
+                if (!state.currentRestaurantId) {
+                    showToast('Please save the restaurant first before adding concepts');
+                    return;
+                }
+                
+                const conceptId = parseInt(document.getElementById('conceptValue').value);
+                if (isNaN(conceptId)) {
+                    showToast('Please select a concept value');
+                    return;
+                }
+                
+                try {
+                    const restaurantModel = ConciergeData.getEntityModel('restaurant');
+                    if (!restaurantModel) {
+                        throw new Error('Restaurant model not found');
+                    }
+                    
+                    // Check if this concept is already associated with the restaurant
+                    const existingConcepts = await restaurantModel.restaurantConcepts.getByRestaurantId(state.currentRestaurantId);
+                    if (existingConcepts.some(c => c.conceptId === conceptId)) {
+                        showToast('This concept is already assigned to this restaurant');
+                        return;
+                    }
+                    
+                    await restaurantModel.restaurantConcepts.add({
+                        restaurantId: state.currentRestaurantId,
+                        conceptId: conceptId,
+                        timestamp: new Date().toISOString()
+                    });
+                    
+                    showToast('Concept added to restaurant');
+                    await loadRestaurantConcepts(state.currentRestaurantId);
+                } catch (error) {
+                    console.error('Error adding concept to restaurant:', error);
+                    showToast(`Error adding concept: ${error.message}`, 5000);
+                }
+            }
+            
+            async function removeConcept(relationId) {
+                if (!confirm('Are you sure you want to remove this concept from the restaurant?')) {
+                    return;
+                }
+                
+                try {
+                    const restaurantModel = ConciergeData.getEntityModel('restaurant');
+                    if (!restaurantModel) {
+                        throw new Error('Restaurant model not found');
+                    }
+                    
+                    await restaurantModel.restaurantConcepts.delete(relationId);
+                    showToast('Concept removed from restaurant');
+                    await loadRestaurantConcepts(state.currentRestaurantId);
+                } catch (error) {
+                    console.error(`Error removing concept relation ${relationId}:`, error);
+                    showToast(`Error removing concept: ${error.message}`, 5000);
+                }
+            }
+            
+            // ====== Location Operations ======
+            async function loadRestaurantLocations(restaurantId) {
+                try {
+                    const restaurantModel = ConciergeData.getEntityModel('restaurant');
+                    if (!restaurantModel) {
+                        throw new Error('Restaurant model not found');
+                    }
+                    
+                    const locations = await restaurantModel.restaurantLocations.getByRestaurantId(restaurantId);
+                    const locationsTable = document.getElementById('locationsList');
+                    
+                    if (!locations || locations.length === 0) {
+                        document.getElementById('noLocationsMessage').style.display = 'block';
+                        document.getElementById('locationsTable').style.display = 'none';
+                        return;
+                    }
+                    
+                    document.getElementById('noLocationsMessage').style.display = 'none';
+                    document.getElementById('locationsTable').style.display = 'table';
+                    
+                    locationsTable.innerHTML = '';
+                    locations.forEach(location => {
+                        const row = document.createElement('tr');
+                        row.innerHTML = `
+                            <td>${location.id}</td>
+                            <td>${location.address || 'N/A'}</td>
+                            <td>${location.city || 'N/A'}</td>
+                            <td>${location.state || 'N/A'}</td>
+                            <td>
+                                <div class="action-buttons">
+                                    <button class="btn-edit-location" data-id="${location.id}">Edit</button>
+                                    <button class="danger btn-delete-location" data-id="${location.id}">Delete</button>
+                                </div>
+                            </td>
+                        `;
+                        locationsTable.appendChild(row);
+                    });
+                    
+                    // Add event listeners
+                    document.querySelectorAll('.btn-edit-location').forEach(btn => {
+                        btn.addEventListener('click', () => editLocation(parseInt(btn.dataset.id)));
+                    });
+                    
+                    document.querySelectorAll('.btn-delete-location').forEach(btn => {
+                        btn.addEventListener('click', () => deleteLocation(parseInt(btn.dataset.id)));
+                    });
+                } catch (error) {
+                    console.error(`Error loading locations for restaurant ${restaurantId}:`, error);
+                    document.getElementById('locationsList').innerHTML = '';
+                    document.getElementById('noLocationsMessage').style.display = 'block';
+                    document.getElementById('noLocationsMessage').textContent = `Error loading locations: ${error.message}`;
+                }
+            }
+            
+            async function editLocation(locationId) {
+                try {
+                    const restaurantModel = ConciergeData.getEntityModel('restaurant');
+                    if (!restaurantModel) {
+                        throw new Error('Restaurant model not found');
+                    }
+                    
+                    const location = await restaurantModel.restaurantLocations.getById(locationId);
+                    if (!location) {
+                        throw new Error(`Location with ID ${locationId} not found`);
+                    }
+                    
+                    // Populate form fields
+                    document.getElementById('locationId').value = location.id;
+                    document.getElementById('address').value = location.address || '';
+                    document.getElementById('city').value = location.city || '';
+                    document.getElementById('state').value = location.state || '';
+                    document.getElementById('zipCode').value = location.zipCode || '';
+                    document.getElementById('latitude').value = location.latitude || '';
+                    document.getElementById('longitude').value = location.longitude || '';
+                    
+                    state.editingLocation = true;
+                    state.currentLocationId = locationId;
+                    
+                    document.getElementById('btnAddLocation').textContent = 'Update Location';
+                    document.getElementById('btnCancelLocation').style.display = 'inline-block';
+                } catch (error) {
+                    console.error(`Error editing location ${locationId}:`, error);
+                    showToast(`Error loading location data: ${error.message}`, 5000);
+                }
+            }
+            
+            function cancelEditLocation() {
+                // Reset location form
+                document.getElementById('locationId').value = '';
+                document.getElementById('address').value = '';
+                document.getElementById('city').value = '';
+                document.getElementById('state').value = '';
+                document.getElementById('zipCode').value = '';
+                document.getElementById('latitude').value = '';
+                document.getElementById('longitude').value = '';
+                
+                state.editingLocation = false;
+                state.currentLocationId = null;
+                
+                document.getElementById('btnAddLocation').textContent = 'Add Location';
+                document.getElementById('btnCancelLocation').style.display = 'none';
+            }
+            
+            async function saveLocation() {
+                if (!state.currentRestaurantId) {
+                    showToast('Please save the restaurant first before adding locations');
+                    return;
+                }
+                
+                const address = document.getElementById('address').value.trim();
+                const city = document.getElementById('city').value.trim();
+                const state = document.getElementById('state').value.trim();
+                const zipCode = document.getElementById('zipCode').value.trim();
+                
+                if (!address || !city || !state || !zipCode) {
+                    showToast('Address, city, state, and ZIP code are required');
+                    return;
+                }
+                
+                try {
+                    const restaurantModel = ConciergeData.getEntityModel('restaurant');
+                    if (!restaurantModel) {
+                        throw new Error('Restaurant model not found');
+                    }
+                    
+                    const locationData = {
+                        restaurantId: state.currentRestaurantId,
+                        address,
+                        city,
+                        state,
+                        zipCode,
+                        latitude: document.getElementById('latitude').value.trim() || undefined,
+                        longitude: document.getElementById('longitude').value.trim() || undefined,
+                        timestamp: new Date().toISOString()
+                    };
+                    
+                    if (state.editingLocation && state.currentLocationId) {
+                        // Update existing location
+                        await restaurantModel.restaurantLocations.update(state.currentLocationId, locationData);
+                        showToast('Location updated successfully');
+                    } else {
+                        // Add new location
+                        await restaurantModel.restaurantLocations.add(locationData);
+                        showToast('Location added successfully');
+                    }
+                    
+                    // Reset form and refresh locations
+                    cancelEditLocation();
+                    await loadRestaurantLocations(state.currentRestaurantId);
+                } catch (error) {
+                    console.error('Error saving location:', error);
+                    showToast(`Error saving location: ${error.message}`, 5000);
+                }
+            }
+            
+            async function deleteLocation(locationId) {
+                if (!confirm('Are you sure you want to delete this location?')) {
+                    return;
+                }
+                
+                try {
+                    const restaurantModel = ConciergeData.getEntityModel('restaurant');
+                    if (!restaurantModel) {
+                        throw new Error('Restaurant model not found');
+                    }
+                    
+                    await restaurantModel.restaurantLocations.delete(locationId);
+                    showToast('Location deleted successfully');
+                    
+                    // If we were editing this location, reset the form
+                    if (state.currentLocationId === locationId) {
+                        cancelEditLocation();
+                    }
+                    
+                    await loadRestaurantLocations(state.currentRestaurantId);
+                } catch (error) {
+                    console.error(`Error deleting location ${locationId}:`, error);
+                    showToast(`Error deleting location: ${error.message}`, 5000);
+                }
+            }
+            
+            // ====== Photo Operations ======
+            async function loadRestaurantPhotos(restaurantId) {
+                try {
+                    const restaurantModel = ConciergeData.getEntityModel('restaurant');
+                    if (!restaurantModel) {
+                        throw new Error('Restaurant model not found');
+                    }
+                    
+                    const photos = await restaurantModel.restaurantPhotos.getByRestaurantId(restaurantId);
+                    const photosContainer = document.getElementById('photosList');
+                    
+                    if (!photos || photos.length === 0) {
+                        document.getElementById('noPhotosMessage').style.display = 'block';
+                        photosContainer.innerHTML = '';
+                        return;
+                    }
+                    
+                    document.getElementById('noPhotosMessage').style.display = 'none';
+                    photosContainer.innerHTML = '';
+                    
+                    photos.forEach(photo => {
+                        const photoDiv = document.createElement('div');
+                        photoDiv.className = 'photo-card';
+                        photoDiv.innerHTML = `
+                            <img src="${photo.url}" alt="${photo.caption || 'Restaurant photo'}" class="photo-preview" 
+                                onerror="this.src='https://via.placeholder.com/200x150?text=Image+Error'">
+                            <div>${photo.caption ? `<strong>${photo.caption}</strong>` : ''}</div>
+                            <div>${photo.credit ? `Credit: ${photo.credit}` : ''}</div>
+                            <div class="photo-actions">
+                                <button class="danger btn-delete-photo" data-id="${photo.id}">Delete</button>
+                            </div>
+                        `;
+                        photosContainer.appendChild(photoDiv);
+                    });
+                    
+                    // Add event listeners
+                    document.querySelectorAll('.btn-delete-photo').forEach(btn => {
+                        btn.addEventListener('click', () => deletePhoto(parseInt(btn.dataset.id)));
+                    });
+                } catch (error) {
+                    console.error(`Error loading photos for restaurant ${restaurantId}:`, error);
+                    document.getElementById('photosList').innerHTML = '';
+                    document.getElementById('noPhotosMessage').style.display = 'block';
+                    document.getElementById('noPhotosMessage').textContent = `Error loading photos: ${error.message}`;
+                }
+            }
+            
+            async function addPhoto() {
+                if (!state.currentRestaurantId) {
+                    showToast('Please save the restaurant first before adding photos');
+                    return;
+                }
+                
+                const photoUrl = document.getElementById('photoUrl').value.trim();
+                const photoCaption = document.getElementById('photoCaption').value.trim();
+                const photoCredit = document.getElementById('photoCredit').value.trim();
+                
+                if (!photoUrl) {
+                    showToast('Photo URL is required');
+                    return;
+                }
+                
+                try {
+                    const restaurantModel = ConciergeData.getEntityModel('restaurant');
+                    if (!restaurantModel) {
+                        throw new Error('Restaurant model not found');
+                    }
+                    
+                    await restaurantModel.restaurantPhotos.add({
+                        restaurantId: state.currentRestaurantId,
+                        url: photoUrl,
+                        caption: photoCaption || undefined,
+                        credit: photoCredit || undefined,
+                        timestamp: new Date().toISOString()
+                    });
+                    
+                    showToast('Photo added successfully');
+                    
+                    // Reset form and refresh photos
+                    document.getElementById('photoUrl').value = '';
+                    document.getElementById('photoCaption').value = '';
+                    document.getElementById('photoCredit').value = '';
+                    
+                    await loadRestaurantPhotos(state.currentRestaurantId);
+                } catch (error) {
+                    console.error('Error adding photo:', error);
+                    showToast(`Error adding photo: ${error.message}`, 5000);
+                }
+            }
+            
+            async function deletePhoto(photoId) {
+                if (!confirm('Are you sure you want to delete this photo?')) {
+                    return;
+                }
+                
+                try {
+                    const restaurantModel = ConciergeData.getEntityModel('restaurant');
+                    if (!restaurantModel) {
+                        throw new Error('Restaurant model not found');
+                    }
+                    
+                    await restaurantModel.restaurantPhotos.delete(photoId);
+                    showToast('Photo deleted successfully');
+                    await loadRestaurantPhotos(state.currentRestaurantId);
+                } catch (error) {
+                    console.error(`Error deleting photo ${photoId}:`, error);
+                    showToast(`Error deleting photo: ${error.message}`, 5000);
+                }
+            }
+            
+            // ====== Search Functionality ======
+            function setupSearch() {
+                const searchInput = document.getElementById('searchInput');
+                searchInput.addEventListener('input', () => {
+                    const searchTerm = searchInput.value.toLowerCase();
+                    const rows = document.querySelectorAll('#restaurantsList tr');
+                    
+                    rows.forEach(row => {
+                        const restaurantName = row.cells[1].textContent.toLowerCase();
+                        const curatorName = row.cells[2].textContent.toLowerCase();
+                        const concepts = row.cells[3].textContent.toLowerCase();
+                        
+                        if (restaurantName.includes(searchTerm) || 
+                            curatorName.includes(searchTerm) || 
+                            concepts.includes(searchTerm)) {
+                            row.style.display = '';
+                        } else {
+                            row.style.display = 'none';
+                        }
+                    });
+                });
+            }
+            
+            // ====== Event Listeners ======
+            function setupEventListeners() {
+                // Tab switching
+                document.querySelectorAll('.tab-button').forEach(button => {
+                    button.addEventListener('click', () => {
+                        setActiveTab(button.dataset.tab);
+                    });
+                });
+                
+                // Restaurant operations
+                document.getElementById('btnRefreshList').addEventListener('click', refreshRestaurantList);
+                document.getElementById('btnAddNew').addEventListener('click', () => showEditorPanel(false));
+                document.getElementById('btnSave').addEventListener('click', saveRestaurant);
+                document.getElementById('btnCancel').addEventListener('click', hideEditorPanel);
+                document.getElementById('btnDelete').addEventListener('click', () => {
+                    const restaurantId = parseInt(document.getElementById('restaurantId').value);
+                    if (restaurantId) {
+                        deleteRestaurant(restaurantId);
+                    }
+                });
+                
+                // Concept operations
+                document.getElementById('conceptCategory').addEventListener('change', e => {
+                    if (e.target.value) {
+                        loadConceptValues(e.target.value);
+                    } else {
+                        document.getElementById('conceptValue').innerHTML = '<option value="">Select value...</option>';
+                    }
+                });
+                document.getElementById('btnAddConcept').addEventListener('click', addConceptToRestaurant);
+                
+                // Location operations
+                document.getElementById('btnAddLocation').addEventListener('click', saveLocation);
+                document.getElementById('btnCancelLocation').addEventListener('click', cancelEditLocation);
+                
+                // Photo operations
+                document.getElementById('btnAddPhoto').addEventListener('click', addPhoto);
+                
+                // Setup search functionality
+                setupSearch();
+            }
+            
+            // ====== Initialization ======
+            async function init() {
+                try {
+                    setupEventListeners();
+                    await initializeDatabase();
+                } catch (error) {
+                    console.error('Initialization error:', error);
+                    updateStatusBar(`Initialization error: ${error.message}`, 'error');
+                }
+            }
+            
+            // Initialize the application
+            init();
+        });
+    </script>
+</body>
+</html>

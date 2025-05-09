@@ -1,0 +1,166 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Restaurant Data",
+  "description": "Schema for restaurant data in Concierge Editor",
+  "type": "object",
+  "required": ["restaurants"],
+  "properties": {
+    "curators": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name"],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "description": "Unique identifier for the curator"
+          },
+          "name": {
+            "type": "string",
+            "description": "Name of the curator"
+          },
+          "lastActive": {
+            "type": "string",
+            "format": "date-time",
+            "description": "ISO 8601 timestamp of last activity"
+          }
+        }
+      }
+    },
+    "concepts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["category", "value"],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "description": "Unique identifier for the concept"
+          },
+          "category": {
+            "type": "string",
+            "description": "Category of the concept"
+          },
+          "value": {
+            "type": "string",
+            "description": "Value of the concept"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "description": "ISO 8601 timestamp of creation or last update"
+          }
+        }
+      }
+    },
+    "restaurants": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "curatorId"],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "description": "Unique identifier for the restaurant"
+          },
+          "name": {
+            "type": "string",
+            "description": "Name of the restaurant"
+          },
+          "curatorId": {
+            "type": "integer",
+            "description": "Identifier of the curator who added this restaurant"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "description": "ISO 8601 timestamp of creation or last update"
+          },
+          "transcription": {
+            "type": ["string", "null"],
+            "description": "Transcription of speech or description about the restaurant"
+          },
+          "description": {
+            "type": ["string", "null"],
+            "description": "Concise description of the restaurant"
+          }
+        }
+      }
+    },
+    "restaurantConcepts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["restaurantId", "conceptId"],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "description": "Unique identifier for the restaurant-concept association"
+          },
+          "restaurantId": {
+            "type": "integer",
+            "description": "Identifier of the associated restaurant"
+          },
+          "conceptId": {
+            "type": "integer",
+            "description": "Identifier of the associated concept"
+          }
+        }
+      }
+    },
+    "restaurantLocations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["restaurantId", "latitude", "longitude"],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "description": "Unique identifier for the restaurant location"
+          },
+          "restaurantId": {
+            "type": "integer",
+            "description": "Identifier of the associated restaurant"
+          },
+          "latitude": {
+            "type": "number",
+            "description": "Latitude coordinate"
+          },
+          "longitude": {
+            "type": "number",
+            "description": "Longitude coordinate"
+          },
+          "address": {
+            "type": ["string", "null"],
+            "description": "Physical address"
+          }
+        }
+      }
+    },
+    "restaurantPhotos": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["restaurantId", "photoDataRef"],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "description": "Unique identifier for the photo"
+          },
+          "restaurantId": {
+            "type": "integer",
+            "description": "Identifier of the associated restaurant"
+          },
+          "photoDataRef": {
+            "type": "string",
+            "description": "Reference or path to the photo data"
+          },
+          "caption": {
+            "type": "string",
+            "description": "Caption for the photo"
+          }
+        }
+      }
+    }
+  }
+}

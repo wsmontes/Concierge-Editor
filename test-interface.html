@@ -1,0 +1,687 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Concierge Editor - Database Test Interface</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            padding: 20px;
+            color: #333;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        header {
+            background: #f4f4f4;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-radius: 5px;
+        }
+        h1, h2 {
+            margin-top: 0;
+        }
+        .panel {
+            background: #f9f9f9;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 5px;
+            border: 1px solid #ddd;
+        }
+        .flex-container {
+            display: flex;
+            gap: 20px;
+        }
+        .flex-item {
+            flex: 1;
+        }
+        button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 3px;
+            cursor: pointer;
+            margin: 5px 0;
+        }
+        button:hover {
+            background: #45a049;
+        }
+        button.danger {
+            background: #f44336;
+        }
+        button.danger:hover {
+            background: #d32f2f;
+        }
+        button.secondary {
+            background: #2196F3;
+        }
+        button.secondary:hover {
+            background: #0b7dda;
+        }
+        textarea, select, input[type="text"], input[type="number"] {
+            width: 100%;
+            padding: 10px;
+            margin: 5px 0;
+            border: 1px solid #ddd;
+            border-radius: 3px;
+            box-sizing: border-box;
+        }
+        textarea {
+            min-height: 200px;
+            font-family: monospace;
+        }
+        pre {
+            background: #eee;
+            padding: 10px;
+            overflow: auto;
+            max-height: 300px;
+            border-radius: 3px;
+        }
+        .log-container {
+            background: #000;
+            color: #0f0;
+            font-family: monospace;
+            padding: 15px;
+            height: 200px;
+            overflow: auto;
+            border-radius: 3px;
+        }
+        .operation-buttons {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th, td {
+            text-align: left;
+            padding: 8px;
+            border-bottom: 1px solid #ddd;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+        tr:hover {
+            background-color: #f5f5f5;
+        }
+        .status-indicator {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 5px;
+        }
+        .status-ok {
+            background-color: #4CAF50;
+        }
+        .status-error {
+            background-color: #f44336;
+        }
+        .status-warning {
+            background-color: #ff9800;
+        }
+        .toast {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: rgba(0,0,0,0.8);
+            color: white;
+            padding: 15px 20px;
+            border-radius: 5px;
+            display: none;
+            z-index: 1000;
+            animation: fadeIn 0.3s;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Concierge Editor - Database Test Interface</h1>
+            <p>Test interface for database operations, data import, and export.</p>
+        </header>
+
+        <!-- Database Initialization Panel -->
+        <section class="panel">
+            <h2>Database Initialization</h2>
+            <div class="operation-buttons">
+                <button id="btnInitDb">Initialize Database</button>
+                <button id="btnCloseDb">Close Database Connection</button>
+                <button id="btnDeleteDb" class="danger">Delete Database</button>
+            </div>
+            <div>
+                <p>Current Status: <span id="dbStatus">Not initialized</span></p>
+            </div>
+        </section>
+
+        <!-- Data Import Panel -->
+        <section class="panel">
+            <h2>Import Data</h2>
+            <div class="flex-container">
+                <div class="flex-item">
+                    <h3>From File</h3>
+                    <input type="file" id="importFile" accept=".json">
+                    <button id="btnImportFile">Import File</button>
+                </div>
+                <div class="flex-item">
+                    <h3>From Text</h3>
+                    <textarea id="importTextarea" placeholder="Paste JSON data here..."></textarea>
+                    <button id="btnImportText">Import from Text</button>
+                    <button id="btnLoadSampleData">Load Sample Data</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- Data Exploration Panel -->
+        <section class="panel">
+            <h2>Data Explorer</h2>
+            <div class="flex-container">
+                <div class="flex-item">
+                    <h3>Browse Collections</h3>
+                    <select id="collectionSelect">
+                        <option value="">Select a collection...</option>
+                        <option value="curators">Curators</option>
+                        <option value="concepts">Concepts</option>
+                        <option value="restaurants">Restaurants</option>
+                        <option value="restaurantConcepts">Restaurant Concepts</option>
+                        <option value="restaurantLocations">Restaurant Locations</option>
+                        <option value="restaurantPhotos">Restaurant Photos</option>
+                    </select>
+                    <button id="btnLoadCollection">Load Collection Data</button>
+                    <div id="collectionData" style="margin-top: 15px;">
+                        <table id="dataTable">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Data</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="dataTableBody">
+                                <!-- Table rows will be added here dynamically -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Restaurant Operations Panel -->
+        <section class="panel">
+            <h2>Restaurant Operations</h2>
+            <div class="flex-container">
+                <div class="flex-item">
+                    <h3>Add New Restaurant</h3>
+                    <input type="text" id="restName" placeholder="Restaurant Name">
+                    <input type="number" id="restCuratorId" placeholder="Curator ID">
+                    <button id="btnAddRestaurant">Add Restaurant</button>
+                </div>
+                <div class="flex-item">
+                    <h3>Get Restaurant Details</h3>
+                    <input type="number" id="restId" placeholder="Restaurant ID">
+                    <button id="btnGetRestaurantDetails">Get Details</button>
+                    <div id="restaurantDetails"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Concept Operations Panel -->
+        <section class="panel">
+            <h2>Concept Operations</h2>
+            <div class="flex-container">
+                <div class="flex-item">
+                    <h3>Add New Concept</h3>
+                    <input type="text" id="conceptCategory" placeholder="Category">
+                    <input type="text" id="conceptValue" placeholder="Value">
+                    <button id="btnAddConcept">Add Concept</button>
+                </div>
+                <div class="flex-item">
+                    <h3>List Categories</h3>
+                    <button id="btnListCategories">List Categories</button>
+                    <div id="categoriesList"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Data Export Panel -->
+        <section class="panel">
+            <h2>Export Data</h2>
+            <div class="flex-container">
+                <div class="flex-item">
+                    <h3>Export to File</h3>
+                    <input type="text" id="exportFilename" placeholder="Export Filename" value="concierge-data">
+                    <select id="exportFormat">
+                        <option value="json">JSON</option>
+                    </select>
+                    <label>
+                        <input type="checkbox" id="exportPretty" checked> Pretty Print
+                    </label>
+                    <button id="btnExportFile">Export to File</button>
+                </div>
+                <div class="flex-item">
+                    <h3>Export to Text</h3>
+                    <button id="btnExportToText">Generate Export Text</button>
+                    <textarea id="exportTextarea" readonly placeholder="Exported data will appear here..."></textarea>
+                </div>
+            </div>
+        </section>
+
+        <!-- Log Panel -->
+        <section class="panel">
+            <h2>Operation Log</h2>
+            <div class="log-container" id="logContainer"></div>
+            <button id="btnClearLog" class="secondary">Clear Log</button>
+        </section>
+    </div>
+
+    <!-- Toast notification element -->
+    <div id="toast" class="toast"></div>
+
+    <!-- Load Ajv for JSON Schema validation - using browser-compatible version -->
+    <script src="https://cdn.jsdelivr.net/npm/ajv@8.12.0/dist/ajv.bundle.js"></script>
+    
+    <!-- Load application JavaScript files in the correct order -->
+    <script src="js/indexedDB-database.js"></script>
+    <script src="js/concierge-data.js"></script>
+    <script src="js/restaurant-model.js"></script>
+    <script src="js/import-export-manager.js"></script>
+    <script src="js/formats/json-format-handler.js"></script>
+
+    <script>
+        /**
+         * Test Interface JavaScript
+         * 
+         * Provides the interactive functionality for testing database operations,
+         * data import/export, and entity model interactions in Concierge Editor.
+         */
+        document.addEventListener('DOMContentLoaded', function() {
+            // ====== Utility Functions ======
+            function log(message, isError = false) {
+                const logContainer = document.getElementById('logContainer');
+                const logEntry = document.createElement('div');
+                logEntry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+                if (isError) {
+                    logEntry.style.color = '#ff6b6b';
+                }
+                logContainer.appendChild(logEntry);
+                logContainer.scrollTop = logContainer.scrollHeight; // Auto-scroll to bottom
+            }
+
+            function displayObject(data, elementId) {
+                const element = document.getElementById(elementId);
+                element.innerHTML = `<pre>${JSON.stringify(data, null, 2)}</pre>`;
+            }
+
+            function updateDbStatus() {
+                const statusElement = document.getElementById('dbStatus');
+                if (ConciergeData.getDatabase().db) {
+                    statusElement.textContent = 'Connected';
+                    statusElement.style.color = 'green';
+                } else {
+                    statusElement.textContent = 'Not connected';
+                    statusElement.style.color = 'red';
+                }
+            }
+            
+            function showToast(message, duration = 3000) {
+                const toast = document.getElementById('toast');
+                toast.textContent = message;
+                toast.style.display = 'block';
+                
+                setTimeout(() => {
+                    toast.style.display = 'none';
+                }, duration);
+            }
+
+            // ====== Database Operations ======
+            document.getElementById('btnInitDb').addEventListener('click', async () => {
+                try {
+                    await ConciergeData.initialize();
+                    log('Database initialized successfully');
+                    updateDbStatus();
+                    showToast('Database initialized');
+                } catch (error) {
+                    log(`Error initializing database: ${error.message}`, true);
+                    showToast(`Error: ${error.message}`, 5000);
+                }
+            });
+
+            document.getElementById('btnCloseDb').addEventListener('click', () => {
+                try {
+                    ConciergeData.closeDatabase();
+                    log('Database connection closed');
+                    updateDbStatus();
+                    showToast('Database connection closed');
+                } catch (error) {
+                    log(`Error closing database: ${error.message}`, true);
+                    showToast(`Error: ${error.message}`, 5000);
+                }
+            });
+
+            document.getElementById('btnDeleteDb').addEventListener('click', async () => {
+                if (confirm('Are you sure you want to delete the database? This cannot be undone.')) {
+                    try {
+                        await ConciergeData.deleteDatabase();
+                        log('Database deleted successfully');
+                        updateDbStatus();
+                        showToast('Database deleted');
+                    } catch (error) {
+                        log(`Error deleting database: ${error.message}`, true);
+                        showToast(`Error: ${error.message}`, 5000);
+                    }
+                }
+            });
+
+            // ====== Import Operations ======
+            document.getElementById('btnImportFile').addEventListener('click', async () => {
+                const fileInput = document.getElementById('importFile');
+                if (!fileInput.files || fileInput.files.length === 0) {
+                    log('Please select a file first', true);
+                    showToast('Please select a file first');
+                    return;
+                }
+
+                try {
+                    log(`Starting import of file '${fileInput.files[0].name}'...`);
+                    await ImportExportManager.importFromFile(fileInput.files[0]);
+                    log(`File '${fileInput.files[0].name}' imported successfully`);
+                    showToast('File imported successfully');
+                } catch (error) {
+                    log(`Error importing file: ${error.message}`, true);
+                    showToast(`Import failed: ${error.message}`, 5000);
+                }
+            });
+
+            document.getElementById('btnImportText').addEventListener('click', async () => {
+                const textData = document.getElementById('importTextarea').value.trim();
+                if (!textData) {
+                    log('Please enter JSON data first', true);
+                    showToast('Please enter JSON data first');
+                    return;
+                }
+
+                try {
+                    log('Starting import from text data...');
+                    await ImportExportManager.importFromString(textData);
+                    log('JSON data imported successfully');
+                    showToast('JSON data imported successfully');
+                } catch (error) {
+                    log(`Error importing data: ${error.message}`, true);
+                    showToast(`Import failed: ${error.message}`, 5000);
+                }
+            });
+
+            document.getElementById('btnLoadSampleData').addEventListener('click', async () => {
+                try {
+                    log('Loading sample data from data.json...');
+                    // Perform a fetch to get the sample data
+                    const response = await fetch('data.json');
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    const data = await response.text();
+                    document.getElementById('importTextarea').value = data;
+                    log('Sample data loaded into text area');
+                    showToast('Sample data loaded');
+                } catch (error) {
+                    log(`Error loading sample data: ${error.message}`, true);
+                    showToast(`Failed to load sample data: ${error.message}`, 5000);
+                }
+            });
+
+            // ====== Data Exploration ======
+            document.getElementById('btnLoadCollection').addEventListener('click', async () => {
+                const collection = document.getElementById('collectionSelect').value;
+                if (!collection) {
+                    log('Please select a collection first', true);
+                    showToast('Please select a collection first');
+                    return;
+                }
+
+                try {
+                    log(`Loading data from '${collection}' collection...`);
+                    const db = ConciergeData.getDatabase();
+                    const data = await db.getAll(collection);
+                    log(`Loaded ${data.length} records from ${collection}`);
+                    
+                    // Display data in the table
+                    const tableBody = document.getElementById('dataTableBody');
+                    tableBody.innerHTML = '';
+                    
+                    if (data.length === 0) {
+                        const row = document.createElement('tr');
+                        const emptyCell = document.createElement('td');
+                        emptyCell.colSpan = 3;
+                        emptyCell.textContent = 'No records found';
+                        emptyCell.style.textAlign = 'center';
+                        row.appendChild(emptyCell);
+                        tableBody.appendChild(row);
+                        return;
+                    }
+                    
+                    data.forEach(item => {
+                        const row = document.createElement('tr');
+                        
+                        // ID cell
+                        const idCell = document.createElement('td');
+                        idCell.textContent = item.id;
+                        row.appendChild(idCell);
+                        
+                        // Data cell
+                        const dataCell = document.createElement('td');
+                        const dataContent = document.createElement('pre');
+                        dataContent.textContent = JSON.stringify(item, null, 2);
+                        dataCell.appendChild(dataContent);
+                        row.appendChild(dataCell);
+                        
+                        // Action cell
+                        const actionCell = document.createElement('td');
+                        const deleteButton = document.createElement('button');
+                        deleteButton.textContent = 'Delete';
+                        deleteButton.className = 'danger';
+                        deleteButton.addEventListener('click', async () => {
+                            if (confirm(`Are you sure you want to delete item with ID ${item.id}?`)) {
+                                try {
+                                    await db.delete(collection, item.id);
+                                    row.remove();
+                                    log(`Deleted item with ID ${item.id} from ${collection}`);
+                                    showToast(`Item deleted from ${collection}`);
+                                } catch (error) {
+                                    log(`Error deleting item: ${error.message}`, true);
+                                    showToast(`Delete failed: ${error.message}`, 5000);
+                                }
+                            }
+                        });
+                        actionCell.appendChild(deleteButton);
+                        row.appendChild(actionCell);
+                        
+                        tableBody.appendChild(row);
+                    });
+                } catch (error) {
+                    log(`Error loading collection: ${error.message}`, true);
+                    showToast(`Error loading collection: ${error.message}`, 5000);
+                }
+            });
+
+            // ====== Restaurant Operations ======
+            document.getElementById('btnAddRestaurant').addEventListener('click', async () => {
+                const name = document.getElementById('restName').value.trim();
+                const curatorId = parseInt(document.getElementById('restCuratorId').value);
+                
+                if (!name || isNaN(curatorId)) {
+                    log('Please enter a name and valid curator ID', true);
+                    showToast('Please enter name and curator ID');
+                    return;
+                }
+                
+                try {
+                    const restaurantModel = ConciergeData.getEntityModel('restaurant');
+                    if (!restaurantModel) throw new Error('Restaurant model not found');
+                    
+                    const newRestaurantId = await restaurantModel.restaurants.add({
+                        name,
+                        curatorId,
+                        timestamp: new Date().toISOString()
+                    });
+                    
+                    log(`Added new restaurant with ID: ${newRestaurantId}`);
+                    showToast(`Restaurant added with ID: ${newRestaurantId}`);
+                    document.getElementById('restName').value = '';
+                } catch (error) {
+                    log(`Error adding restaurant: ${error.message}`, true);
+                    showToast(`Error adding restaurant: ${error.message}`, 5000);
+                }
+            });
+
+            document.getElementById('btnGetRestaurantDetails').addEventListener('click', async () => {
+                const restId = parseInt(document.getElementById('restId').value);
+                if (isNaN(restId)) {
+                    log('Please enter a valid restaurant ID', true);
+                    showToast('Please enter a valid restaurant ID');
+                    return;
+                }
+                
+                try {
+                    const restaurantModel = ConciergeData.getEntityModel('restaurant');
+                    if (!restaurantModel) throw new Error('Restaurant model not found');
+                    
+                    const details = await restaurantModel.restaurants.getFullDetails(restId);
+                    if (!details) {
+                        log(`Restaurant with ID ${restId} not found`, true);
+                        showToast(`Restaurant with ID ${restId} not found`);
+                        return;
+                    }
+                    
+                    displayObject(details, 'restaurantDetails');
+                    log(`Retrieved details for restaurant '${details.name}'`);
+                    showToast(`Restaurant details loaded`);
+                } catch (error) {
+                    log(`Error getting restaurant details: ${error.message}`, true);
+                    showToast(`Error: ${error.message}`, 5000);
+                }
+            });
+
+            // ====== Concept Operations ======
+            document.getElementById('btnAddConcept').addEventListener('click', async () => {
+                const category = document.getElementById('conceptCategory').value.trim();
+                const value = document.getElementById('conceptValue').value.trim();
+                
+                if (!category || !value) {
+                    log('Please enter both category and value', true);
+                    showToast('Please enter both category and value');
+                    return;
+                }
+                
+                try {
+                    const restaurantModel = ConciergeData.getEntityModel('restaurant');
+                    if (!restaurantModel) throw new Error('Restaurant model not found');
+                    
+                    const conceptId = await restaurantModel.concepts.add({
+                        category,
+                        value,
+                        timestamp: new Date().toISOString()
+                    });
+                    
+                    log(`Added new concept with ID: ${conceptId}`);
+                    showToast(`Concept added with ID: ${conceptId}`);
+                    document.getElementById('conceptValue').value = '';
+                } catch (error) {
+                    log(`Error adding concept: ${error.message}`, true);
+                    showToast(`Error: ${error.message}`, 5000);
+                }
+            });
+
+            document.getElementById('btnListCategories').addEventListener('click', async () => {
+                try {
+                    const restaurantModel = ConciergeData.getEntityModel('restaurant');
+                    if (!restaurantModel) throw new Error('Restaurant model not found');
+                    
+                    const categories = await restaurantModel.concepts.getCategories();
+                    displayObject(categories, 'categoriesList');
+                    log(`Retrieved ${categories.length} categories`);
+                    showToast(`${categories.length} categories retrieved`);
+                } catch (error) {
+                    log(`Error listing categories: ${error.message}`, true);
+                    showToast(`Error: ${error.message}`, 5000);
+                }
+            });
+
+            // ====== Export Operations ======
+            document.getElementById('btnExportFile').addEventListener('click', async () => {
+                const filename = document.getElementById('exportFilename').value.trim() || 'concierge-data';
+                const format = document.getElementById('exportFormat').value;
+                const prettyPrint = document.getElementById('exportPretty').checked;
+                
+                try {
+                    log(`Exporting database to ${filename}.${format} file...`);
+                    await ImportExportManager.exportToFile(filename, format, { pretty: prettyPrint });
+                    log(`Database exported successfully to ${filename}${ImportExportManager.getFormatHandler(format).fileExtension}`);
+                    showToast('Export completed successfully');
+                } catch (error) {
+                    log(`Error exporting file: ${error.message}`, true);
+                    showToast(`Export failed: ${error.message}`, 5000);
+                }
+            });
+
+            document.getElementById('btnExportToText').addEventListener('click', async () => {
+                const format = document.getElementById('exportFormat').value;
+                const prettyPrint = document.getElementById('exportPretty').checked;
+                
+                try {
+                    log('Generating export data...');
+                    const exportData = await ImportExportManager.exportToString(format, { pretty: prettyPrint });
+                    document.getElementById('exportTextarea').value = exportData;
+                    log('Database exported successfully to text');
+                    showToast('Export data generated');
+                } catch (error) {
+                    log(`Error exporting to text: ${error.message}`, true);
+                    showToast(`Export failed: ${error.message}`, 5000);
+                }
+            });
+
+            // ====== Log Operations ======
+            document.getElementById('btnClearLog').addEventListener('click', () => {
+                document.getElementById('logContainer').innerHTML = '';
+                log('Log cleared');
+            });
+
+            // Initialize on page load
+            try {
+                log('Starting database initialization...');
+                ConciergeData.initialize().then(() => {
+                    log('Database initialized automatically on page load');
+                    updateDbStatus();
+                    showToast('Database initialized successfully');
+                }).catch(error => {
+                    log(`Error during auto-initialization: ${error.message}`, true);
+                    updateDbStatus();
+                    showToast(`Initialization error: ${error.message}`, 5000);
+                });
+            } catch (error) {
+                log(`Could not auto-initialize: ${error.message}`, true);
+                updateDbStatus();
+            }
+            
+            // Check for Ajv availability and log status
+            setTimeout(() => {
+                if (typeof Ajv === 'function') {
+                    log('Ajv library loaded successfully - full validation capabilities available');
+                } else {
+                    log('Ajv library not detected - using limited validation capabilities', true);
+                }
+            }, 500); // Small delay to ensure library is fully loaded
+        });
+    </script>
+</body>
+</html>
