@@ -689,35 +689,46 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/idb@7/build/umd.js"></script>
     
-    <!-- Utility Modules -->
-    <script src="js/utils/ui.js"></script>
+    <!-- Load scripts in the correct order -->
+    <!-- Base utility modules first -->
     <script src="js/utils/storage.js"></script>
     <script src="js/utils/validation.js"></script>
     <script src="js/utils/error-handling.js"></script>
     
-    <!-- Service Modules -->
+    <!-- Service Registry before any service -->
     <script src="js/services/service-registry.js"></script>
+    
+    <!-- Base service framework -->
+    <script src="js/services/base-service.js"></script>
+    
+    <!-- Entity services -->
     <script src="js/services/restaurant-service.js"></script>
     <script src="js/services/concept-service.js"></script>
     <script src="js/services/curator-service.js"></script>
-    <script src="js/services/image-service.js"></script>
     <script src="js/services/location-service.js"></script>
-    <script src="js/services/storage-service.js"></script>
+    <script src="js/services/image-service.js"></script>
     
-    <!-- Feature Modules -->
+    <!-- Business logic module -->
+    <script src="js/services/business-logic.js"></script>
+    
+    <!-- Legacy utility modules -->
+    <script src="js/utils/data.js"></script>
+    <script src="js/utils/data-access.js"></script>
+    <script src="js/utils/ui-utils.js"></script>
+    
+    <!-- UI modules -->
     <script src="js/modules/sidebar.js"></script>
-    <script src="js/modules/navigation.js"></script>
     <script src="js/modules/dashboard.js"></script>
     <script src="js/modules/restaurant.js"></script>
-    <script src="js/modules/restaurant-edit.js"></script>
     <script src="js/modules/concept.js"></script>
-    <script src="js/modules/gallery.js"></script>
     <script src="js/modules/import-export.js"></script>
+    <script src="js/modules/gallery.js"></script>
     <script src="js/modules/search.js"></script>
     <script src="js/modules/form-controls.js"></script>
+    <script src="js/modules/restaurant-edit.js"></script>
+    <script src="js/modules/navigation.js"></script>
     
-    <!-- Main Application -->
+    <!-- Main application initialization -->
     <script src="js/main.js"></script>
-    <script src="js/restaurant-ui.js"></script>
 </body>
 </html>

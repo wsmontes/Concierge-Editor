@@ -1,158 +1,168 @@
 /**
- * Location Service - Handles restaurant location data
- * Dependencies: BaseService, StorageModule
- * Provides location management functionality
+ * Location Service - Manages location entities
+ * Dependencies: BaseService, StorageModule, ValidationService
+ * Provides location-specific business logic and data management
  */
 
-class LocationService extends BaseService {
-    /**
-     * Initialize the location service
-     */
-    constructor() {
-        super(StorageModule.STORES.LOCATIONS);
-    }
+const LocationService = (function() {
+    // Create base service for locations
+    const baseService = BaseService.createService(
+        StorageModule.STORES.LOCATIONS,
+        'location',
+        ValidationService.validateLocation
+    );
     
     /**
      * Get location for a specific restaurant
-     * @param {string|number} restaurantId - Restaurant ID
-     * @return {Promise<Object>} - Promise with restaurant's location
+     * @param {number} restaurantId - Restaurant ID
+     * @returns {Promise<Object|null>} - Promise resolving to location or null
      */
-    async getRestaurantLocation(restaurantId) {
+    async function getRestaurantLocation(restaurantId) {
         try {
             const locations = await StorageModule.getItemsByIndex(
-                this.storeName, 'restaurantId', restaurantId
+                StorageModule.STORES.LOCATIONS,
+                'restaurantId',
+                parseInt(restaurantId)
             );
             
-            return locations.length > 0 ? locations[0] : null;
+            return locations[0] || null;
         } catch (error) {
-            console.error(`Error getting location for restaurant ${restaurantId}:`, error);
-            throw new Error(`Failed to get restaurant location: ${error.message}`);
+            ErrorHandlingService.handleError(error, `Getting location for restaurant ${restaurantId}`);
+            return null;
         }
     }
     
     /**
      * Save location for a restaurant
+     * @param {number} restaurantId - Restaurant ID
      * @param {Object} locationData - Location data
-     * @param {string|number} locationData.restaurantId - Restaurant ID
-     * @return {Promise<Object>} - Promise with saved location
+     * @returns {Promise<Object>} - Promise resolving to saved location
      */
-    async saveRestaurantLocation(locationData) {
-        if (!locationData || !locationData.restaurantId) {
-            throw new Error('Restaurant ID is required in location data');
-        }
-        
+    async function save(restaurantId, locationData) {
         try {
             // Check if location already exists for this restaurant
-            const existingLocation = await this.getRestaurantLocation(locationData.restaurantId);
+            const existing = await getRestaurantLocation(restaurantId);
             
-            // Prepare location data
+            // Format the location data
             const location = {
                 ...locationData,
+                restaurantId: parseInt(restaurantId),
+                id: existing ? existing.id : Date.now(),
                 timestamp: new Date().toISOString()
             };
             
-            // Update existing or create new
-            if (existingLocation) {
-                location.id = existingLocation.id;
-            } else {
-                location.id = Date.now();
+            // Validate location data
+            if (ValidationService.validateLocation) {
+                const validationResult = ValidationService.validateLocation(location);
+                if (!validationResult.valid) {
+                    throw new Error(`Invalid location: ${validationResult.errors.join(', ')}`);
+                }
             }
             
-            await StorageModule.saveItem(this.storeName, location);
+            // Save to storage
+            await StorageModule.saveItem(StorageModule.STORES.LOCATIONS, location);
             return location;
         } catch (error) {
-            console.error('Error saving restaurant location:', error);
-            throw new Error(`Failed to save location: ${error.message}`);
+            ErrorHandlingService.handleError(error, 'Saving location');
+            throw error;
         }
     }
     
     /**
      * Delete location for a restaurant
-     * @param {string|number} restaurantId - Restaurant ID
-     * @return {Promise<boolean>} - Promise resolving to true if successful
+     * @param {number} restaurantId - Restaurant ID
+     * @returns {Promise<boolean>} - Promise resolving to success flag
      */
-    async deleteRestaurantLocation(restaurantId) {
+    async function deleteRestaurantLocation(restaurantId) {
         try {
-            const location = await this.getRestaurantLocation(restaurantId);
+            const location = await getRestaurantLocation(restaurantId);
             
             if (!location) {
-                return true; // Nothing to delete
+                return false;
             }
             
-            await StorageModule.deleteItem(this.storeName, location.id);
+            await StorageModule.deleteItem(StorageModule.STORES.LOCATIONS, location.id);
             return true;
         } catch (error) {
-            console.error(`Error deleting location for restaurant ${restaurantId}:`, error);
-            throw new Error(`Failed to delete location: ${error.message}`);
+            ErrorHandlingService.handleError(error, `Deleting location for restaurant ${restaurantId}`);
+            return false;
         }
     }
     
     /**
-     * Find restaurants within geographic area
-     * @param {Object} coordinates - Center point coordinates
-     * @param {number} coordinates.latitude - Latitude
-     * @param {number} coordinates.longitude - Longitude
-     * @param {number} radiusKm - Search radius in kilometers
-     * @return {Promise<Array>} - Promise with matching restaurant locations
+     * Find restaurants by proximity
+     * @param {number} latitude - Latitude coordinate
+     * @param {number} longitude - Longitude coordinate
+     * @param {number} maxDistance - Maximum distance in kilometers
+     * @returns {Promise<Array>} - Promise resolving to array of nearby restaurants
      */
-    async findLocationsInArea(coordinates, radiusKm = 5) {
-        if (!coordinates || typeof coordinates.latitude !== 'number' || typeof coordinates.longitude !== 'number') {
-            throw new Error('Valid coordinates are required');
-        }
-        
+    async function findNearbyRestaurants(latitude, longitude, maxDistance = 5) {
         try {
-            const allLocations = await this.getAll();
+            // Get all locations
+            const locations = await baseService.getAll();
             
-            // Filter locations within radius
-            const locationsInArea = allLocations.filter(location => 
-                this.calculateDistance(
-                    coordinates.latitude,
-                    coordinates.longitude,
-                    location.latitude,
-                    location.longitude
-                ) <= radiusKm
-            );
+            // Calculate distances and filter
+            const nearby = [];
+            for (const location of locations) {
+                const distance = calculateDistance(
+                    latitude, longitude,
+                    location.latitude, location.longitude
+                );
+                
+                if (distance <= maxDistance) {
+                    nearby.push({
+                        ...location,
+                        distance
+                    });
+                }
+            }
             
-            return locationsInArea;
+            // Sort by distance
+            nearby.sort((a, b) => a.distance - b.distance);
+            return nearby;
         } catch (error) {
-            console.error('Error finding locations in area:', error);
-            throw new Error(`Failed to search locations: ${error.message}`);
+            ErrorHandlingService.handleError(error, 'Finding nearby restaurants');
+            return [];
         }
     }
     
     /**
-     * Calculate distance between two points using Haversine formula
-     * @param {number} lat1 - Latitude of point 1
-     * @param {number} lon1 - Longitude of point 1
-     * @param {number} lat2 - Latitude of point 2
-     * @param {number} lon2 - Longitude of point 2
-     * @return {number} - Distance in kilometers
+     * Calculate distance between two coordinates using Haversine formula
+     * @param {number} lat1 - Latitude of first point
+     * @param {number} lon1 - Longitude of first point
+     * @param {number} lat2 - Latitude of second point
+     * @param {number} lon2 - Longitude of second point
+     * @returns {number} - Distance in kilometers
      */
-    calculateDistance(lat1, lon1, lat2, lon2) {
-        const R = 6371; // Earth radius in km
-        const dLat = this.toRadians(lat2 - lat1);
-        const dLon = this.toRadians(lon2 - lon1);
+    function calculateDistance(lat1, lon1, lat2, lon2) {
+        const R = 6371; // Earth's radius in km
+        const dLat = toRadians(lat2 - lat1);
+        const dLon = toRadians(lon2 - lon1);
         
         const a = 
             Math.sin(dLat/2) * Math.sin(dLat/2) +
-            Math.cos(this.toRadians(lat1)) * Math.cos(this.toRadians(lat2)) * 
+            Math.cos(toRadians(lat1)) * Math.cos(toRadians(lat2)) * 
             Math.sin(dLon/2) * Math.sin(dLon/2);
             
         const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-        const distance = R * c;
-        
-        return distance;
+        return R * c;
     }
     
     /**
      * Convert degrees to radians
      * @param {number} degrees - Angle in degrees
-     * @return {number} - Angle in radians
+     * @returns {number} - Angle in radians
      */
-    toRadians(degrees) {
+    function toRadians(degrees) {
         return degrees * (Math.PI / 180);
     }
-}
-
-// Singleton instance
-const locationService = new LocationService();
+    
+    // Extend base service with location-specific methods
+    return {
+        ...baseService,
+        getRestaurantLocation,
+        save,
+        deleteRestaurantLocation,
+        findNearbyRestaurants
+    };
+})();

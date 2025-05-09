@@ -13,15 +13,22 @@ document.addEventListener('DOMContentLoaded', function() {
  */
 async function initApp() {
     try {
-        console.log('Initializing application...');
+        console.log('Concierge Editor initialized');
         
         // Initialize UI components that don't need data
         initUIComponents();
         
-        // Initialize storage and services
+        // Initialize storage first
         await StorageModule.initDatabase();
         console.log('Storage initialized');
-        await ServiceRegistry.initServices();
+        
+        // Initialize ServiceRegistry
+        if (typeof ServiceRegistry !== 'undefined' && typeof ServiceRegistry.initServices === 'function') {
+            await ServiceRegistry.initServices();
+            console.log('Services initialized');
+        } else {
+            console.warn('ServiceRegistry not available or missing initServices method');
+        }
         
         // Initialize data-dependent modules
         initDataDependentModules();
@@ -29,7 +36,6 @@ async function initApp() {
         // Update application statistics
         updateAppStats();
         
-        // Show initialization complete message
         console.log('Application initialized successfully');
         
     } catch (error) {

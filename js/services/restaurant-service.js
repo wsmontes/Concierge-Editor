@@ -1,176 +1,138 @@
 /**
- * Restaurant Service - Handles restaurant data operations
- * Dependencies: StorageModule
- * Part of the Service Layer in the application architecture
+ * Restaurant Service - Manages restaurant entities
+ * Dependencies: BaseService, StorageModule, ValidationService, ErrorHandlingService
+ * Provides restaurant-specific business logic and data management
  */
 
-const RestaurantService = (function() {
-    const STORE = StorageModule.STORES.RESTAURANTS;
+// Use var to prevent duplicate declaration error when script is loaded multiple times
+var RestaurantService = (function() {
+    // Create base service for restaurants
+    const storeName = StorageModule.STORES.RESTAURANTS;
     
     /**
      * Get all restaurants
-     * @returns {Promise<Array>} Array of all restaurants
+     * @returns {Promise<Array>} - Promise resolving to array of restaurants
      */
     async function getAll() {
         try {
-            return await StorageModule.getAllItems(STORE);
+            return await StorageModule.getAllItems(storeName);
         } catch (error) {
-            console.error('Error getting all restaurants:', error);
-            throw error;
+            ErrorHandlingService.handleError(error, 'Getting all restaurants');
+            return [];
         }
     }
     
     /**
      * Get a restaurant by ID
-     * @param {number|string} id - Restaurant ID
-     * @returns {Promise<Object>} Restaurant object
+     * @param {number} id - Restaurant ID
+     * @returns {Promise<Object>} - Promise resolving to restaurant object
      */
     async function getById(id) {
         try {
-            return await StorageModule.getItem(STORE, id);
+            return await StorageModule.getItem(storeName, id);
         } catch (error) {
-            console.error(`Error getting restaurant ${id}:`, error);
-            throw error;
-        }
-    }
-    
-    /**
-     * Get a restaurant with all its related data
-     * @param {number|string} id - Restaurant ID
-     * @returns {Promise<Object>} Restaurant with related data
-     */
-    async function getWithRelations(id) {
-        try {
-            const restaurant = await getById(id);
-            
-            if (!restaurant) {
-                return { restaurant: null };
-            }
-            
-            // Get curator
-            const curator = restaurant.curatorId ? 
-                await StorageModule.getItem(StorageModule.STORES.CURATORS, restaurant.curatorId) : 
-                null;
-            
-            // Get associated concepts
-            const restaurantConcepts = await StorageModule.getItemsByIndex(
-                StorageModule.STORES.RESTAURANT_CONCEPTS,
-                'restaurantId',
-                restaurant.id
-            );
-            
-            const conceptIds = restaurantConcepts.map(rc => rc.conceptId);
-            
-            // If we have concept IDs, load the actual concept data
-            let concepts = [];
-            let conceptsByCategory = {};
-            
-            if (conceptIds.length > 0) {
-                // Load all concepts then filter
-                const allConcepts = await StorageModule.getAllItems(StorageModule.STORES.CONCEPTS);
-                concepts = allConcepts.filter(concept => conceptIds.includes(concept.id));
-                
-                // Group concepts by category
-                conceptsByCategory = concepts.reduce((acc, concept) => {
-                    if (!acc[concept.category]) {
-                        acc[concept.category] = [];
-                    }
-                    acc[concept.category].push(concept);
-                    return acc;
-                }, {});
-            }
-            
-            // Get location
-            const location = await StorageModule.getItemsByIndex(
-                StorageModule.STORES.LOCATIONS,
-                'restaurantId',
-                restaurant.id
-            ).then(items => items[0] || null);
-            
-            // Get photos
-            const photos = await StorageModule.getItemsByIndex(
-                StorageModule.STORES.PHOTOS,
-                'restaurantId',
-                restaurant.id
-            );
-            
-            return {
-                restaurant,
-                curator,
-                concepts,
-                conceptIds,
-                conceptsByCategory,
-                location,
-                photos
-            };
-        } catch (error) {
-            console.error(`Error getting restaurant ${id} with relations:`, error);
-            throw error;
+            ErrorHandlingService.handleError(error, `Getting restaurant ${id}`);
+            return null;
         }
     }
     
     /**
      * Create a new restaurant
-     * @param {Object} restaurantData - Restaurant data
-     * @returns {Promise<Object>} Created restaurant
+     * @param {Object} data - Restaurant data
+     * @returns {Promise<Object>} - Promise resolving to created restaurant
      */
-    async function create(restaurantData) {
+    async function create(data) {
         try {
-            // Generate ID if not provided
-            if (!restaurantData.id) {
-                restaurantData.id = Date.now();
-            }
-            
-            // Set creation timestamp if not provided
-            if (!restaurantData.timestamp) {
-                restaurantData.timestamp = new Date().toISOString();
-            }
-            
-            return await StorageModule.saveItem(STORE, restaurantData);
-        } catch (error) {
-            console.error('Error creating restaurant:', error);
-            throw error;
-        }
-    }
-    
-    /**
-     * Update an existing restaurant
-     * @param {number|string} id - Restaurant ID
-     * @param {Object} restaurantData - Updated restaurant data
-     * @returns {Promise<Object>} Updated restaurant
-     */
-    async function update(id, restaurantData) {
-        try {
-            const existing = await getById(id);
-            
-            if (!existing) {
-                throw new Error(`Restaurant with ID ${id} not found`);
-            }
-            
-            const updated = {
-                ...existing,
-                ...restaurantData,
-                id: existing.id // Ensure ID remains the same
+            // Default properties if not provided
+            const restaurant = {
+                name: data.name || 'New Restaurant',
+                status: data.status || 'draft',
+                timestamp: data.timestamp || new Date().toISOString(),
+                curatorId: data.curatorId || null,
+                description: data.description || null,
+                transcription: data.transcription || null,
+                id: Date.now()
             };
             
-            return await StorageModule.saveItem(STORE, updated);
+            // Save the restaurant
+            await StorageModule.saveItem(storeName, restaurant);
+            
+            return restaurant;
         } catch (error) {
-            console.error(`Error updating restaurant ${id}:`, error);
+            ErrorHandlingService.handleError(error, 'Creating restaurant');
             throw error;
         }
     }
     
     /**
-     * Delete a restaurant
-     * @param {number|string} id - Restaurant ID
-     * @returns {Promise<void>}
+     * Get restaurant with all related data
+     * @param {number} id - Restaurant ID
+     * @returns {Promise<Object>} - Promise resolving to restaurant with related data
      */
-    async function deleteRestaurant(id) {
+    async function getWithRelations(id) {
         try {
-            await StorageModule.deleteItem(STORE, id);
+            // Get restaurant
+            const restaurant = await StorageModule.getItem(storeName, id);
+            if (!restaurant) {
+                return { restaurant: null };
+            }
+            
+            // Get curator
+            let curator = null;
+            if (restaurant.curatorId) {
+                curator = await StorageModule.getItem(StorageModule.STORES.CURATORS, restaurant.curatorId);
+            }
+            
+            return {
+                restaurant,
+                curator,
+                concepts: [],
+                conceptIds: [],
+                photos: [],
+                location: null
+            };
         } catch (error) {
-            console.error(`Error deleting restaurant ${id}:`, error);
-            throw error;
+            ErrorHandlingService.handleError(error, `Getting restaurant ${id} with relations`);
+            return { restaurant: null, error: error.message };
+        }
+    }
+    
+    /**
+     * Count total restaurants
+     * @returns {Promise<number>} - Promise resolving to count
+     */
+    async function count() {
+        try {
+            return await StorageModule.countItems(storeName);
+        } catch (error) {
+            ErrorHandlingService.handleError(error, 'Counting restaurants');
+            return 0;
+        }
+    }
+    
+    /**
+     * Get counts of restaurants by status
+     * @returns {Promise<Object>} - Promise resolving to status counts
+     */
+    async function getStatusCounts() {
+        try {
+            const restaurants = await getAll();
+            const counts = {
+                draft: 0,
+                revised: 0,
+                production: 0,
+                archived: 0
+            };
+            
+            restaurants.forEach(restaurant => {
+                const status = restaurant.status || 'draft';
+                counts[status] = (counts[status] || 0) + 1;
+            });
+            
+            return counts;
+        } catch (error) {
+            ErrorHandlingService.handleError(error, 'Getting restaurant status counts');
+            return { draft: 0, revised: 0, production: 0, archived: 0 };
         }
     }
     
@@ -185,41 +147,48 @@ const RestaurantService = (function() {
             const { conceptIds, location, images } = relations;
             
             // Save restaurant
-            const savedRestaurant = restaurantData.id ? 
-                await update(restaurantData.id, restaurantData) : 
-                await create(restaurantData);
+            let savedRestaurant;
+            if (restaurantData.id) {
+                savedRestaurant = await baseService.update(restaurantData.id, restaurantData);
+            } else {
+                savedRestaurant = await baseService.create(restaurantData);
+            }
             
             // Handle concepts if provided
             if (conceptIds && Array.isArray(conceptIds)) {
-                await updateRestaurantConcepts(savedRestaurant.id, conceptIds);
+                await saveConcepts(savedRestaurant.id, conceptIds);
             }
             
             // Handle location if provided
             if (location) {
-                await saveRestaurantLocation(savedRestaurant.id, location);
+                const locationService = ServiceRegistry.getLocationService();
+                await locationService.save(savedRestaurant.id, location);
             }
             
             // Handle images if provided
             if (images && Array.isArray(images)) {
-                // This would use ImageService in a real implementation
+                const imageService = ServiceRegistry.getImageService();
+                for (const image of images) {
+                    await imageService.saveImage(savedRestaurant.id, image);
+                }
             }
             
             return savedRestaurant;
         } catch (error) {
-            console.error('Error saving restaurant with relations:', error);
+            ErrorHandlingService.handleError(error, 'Saving restaurant with relations');
             throw error;
         }
     }
     
     /**
-     * Update restaurant concepts
-     * @param {number|string} restaurantId - Restaurant ID
-     * @param {Array<number|string>} conceptIds - Concept IDs
+     * Save concepts for a restaurant
+     * @param {number} restaurantId - Restaurant ID
+     * @param {Array<number>} conceptIds - Array of concept IDs
      * @returns {Promise<void>}
      */
-    async function updateRestaurantConcepts(restaurantId, conceptIds) {
+    async function saveConcepts(restaurantId, conceptIds) {
         try {
-            // Get existing restaurant-concept associations
+            // Get existing associations
             const existingAssociations = await StorageModule.getItemsByIndex(
                 StorageModule.STORES.RESTAURANT_CONCEPTS,
                 'restaurantId',
@@ -233,224 +202,86 @@ const RestaurantService = (function() {
             
             // Create new associations
             for (const conceptId of conceptIds) {
-                const assoc = {
+                await StorageModule.saveItem(StorageModule.STORES.RESTAURANT_CONCEPTS, {
                     id: Date.now() + Math.random().toString(36).substring(2, 10),
                     restaurantId,
                     conceptId
-                };
-                await StorageModule.saveItem(StorageModule.STORES.RESTAURANT_CONCEPTS, assoc);
+                });
             }
         } catch (error) {
-            console.error(`Error updating concepts for restaurant ${restaurantId}:`, error);
+            ErrorHandlingService.handleError(error, `Saving concepts for restaurant ${restaurantId}`);
             throw error;
         }
     }
     
     /**
-     * Save restaurant location
-     * @param {number|string} restaurantId - Restaurant ID
-     * @param {Object} locationData - Location data
-     * @returns {Promise<Object>} Saved location
+     * Search for restaurants based on criteria
+     * @param {Object} criteria - Search criteria
+     * @returns {Promise<Object>} Search results and pagination info
      */
-    async function saveRestaurantLocation(restaurantId, locationData) {
+    async function search(criteria = {}) {
         try {
-            // Check for existing location
-            const existingLocations = await StorageModule.getItemsByIndex(
-                StorageModule.STORES.LOCATIONS,
-                'restaurantId',
-                restaurantId
-            );
+            let restaurants = await baseService.getAll();
+            let filteredCount = restaurants.length;
             
-            const existingLocation = existingLocations[0];
-            
-            // Prepare location data
-            const location = {
-                ...locationData,
-                restaurantId
-            };
-            
-            if (existingLocation) {
-                // Update existing
-                location.id = existingLocation.id;
-            } else {
-                // Create new
-                location.id = Date.now();
-            }
-            
-            return await StorageModule.saveItem(StorageModule.STORES.LOCATIONS, location);
-        } catch (error) {
-            console.error(`Error saving location for restaurant ${restaurantId}:`, error);
-            throw error;
-        }
-    }
-    
-    /**
-     * Count total restaurants
-     * @return {Promise<number>} Number of restaurants
-     */
-    async function count() {
-        try {
-            return await StorageModule.countItems(STORE);
-        } catch (error) {
-            console.error('Error counting restaurants:', error);
-            throw error;
-        }
-    }
-    
-    /**
-     * Get counts of restaurants by status
-     * @return {Promise<Object>} Object with status counts
-     */
-    async function getStatusCounts() {
-        try {
-            const restaurants = await getAll();
-            const statusCounts = {
-                draft: 0,
-                revised: 0,
-                production: 0,
-                archived: 0
-            };
-            
-            restaurants.forEach(restaurant => {
-                const status = restaurant.status || 'draft';
-                if (statusCounts[status] !== undefined) {
-                    statusCounts[status]++;
+            // Apply filters
+            if (criteria) {
+                // Text search
+                if (criteria.text) {
+                    const searchText = criteria.text.toLowerCase();
+                    restaurants = restaurants.filter(r => 
+                        r.name.toLowerCase().includes(searchText) || 
+                        (r.description && r.description.toLowerCase().includes(searchText)) ||
+                        (r.transcription && r.transcription.toLowerCase().includes(searchText))
+                    );
                 }
-            });
-            
-            return statusCounts;
-        } catch (error) {
-            console.error('Error getting restaurant status counts:', error);
-            throw error;
-        }
-    }
-    
-    /**
-     * Get restaurant analytics data
-     * @param {string} timeframe - 'week', 'month', or 'year'
-     * @return {Promise<Object>} Analytics data for charts
-     */
-    async function getAnalytics(timeframe = 'month') {
-        try {
-            const restaurants = await getAll();
-            const now = new Date();
-            const results = {
-                labels: [],
-                datasets: [
-                    {
-                        label: 'Restaurants',
-                        data: []
-                    }
-                ],
-                totals: {
-                    restaurants: restaurants.length,
-                    byStatus: await getStatusCounts()
-                }
-            };
-            
-            // Generate time periods based on timeframe
-            let timePeriods = [];
-            let format = '';
-            
-            switch (timeframe) {
-                case 'week':
-                    // Last 7 days
-                    for (let i = 6; i >= 0; i--) {
-                        const d = new Date();
-                        d.setDate(d.getDate() - i);
-                        timePeriods.push(d);
-                        results.labels.push(d.toLocaleDateString(undefined, { weekday: 'short' }));
-                    }
-                    format = 'day';
-                    break;
-                    
-                case 'year':
-                    // Last 12 months
-                    for (let i = 11; i >= 0; i--) {
-                        const d = new Date();
-                        d.setMonth(d.getMonth() - i);
-                        timePeriods.push(d);
-                        results.labels.push(d.toLocaleDateString(undefined, { month: 'short' }));
-                    }
-                    format = 'month';
-                    break;
-                    
-                case 'month':
-                default:
-                    // Last 30 days in 6 chunks of 5 days
-                    for (let i = 5; i >= 0; i--) {
-                        const d = new Date();
-                        d.setDate(d.getDate() - (i * 5));
-                        timePeriods.push(d);
-                        results.labels.push(d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' }));
-                    }
-                    format = 'day';
-                    break;
-            }
-            
-            // Count restaurants per time period
-            const counts = new Array(timePeriods.length).fill(0);
-            
-            restaurants.forEach(restaurant => {
-                const restaurantDate = new Date(restaurant.timestamp);
                 
-                // Find which period this restaurant belongs to
-                for (let i = 0; i < timePeriods.length; i++) {
-                    const periodDate = timePeriods[i];
-                    const nextPeriodDate = i < timePeriods.length - 1 ? timePeriods[i + 1] : new Date();
-                    
-                    if (isSamePeriod(restaurantDate, periodDate, format) || 
-                        (restaurantDate >= periodDate && restaurantDate < nextPeriodDate)) {
-                        counts[i]++;
-                        break;
-                    }
+                // Status filter
+                if (criteria.statuses && criteria.statuses.length > 0) {
+                    restaurants = restaurants.filter(r => {
+                        const status = r.status || 'draft';
+                        return criteria.statuses.includes(status);
+                    });
                 }
-            });
+                
+                // Apply more filters as needed
+            }
             
-            results.datasets[0].data = counts;
-            return results;
+            // Get total count after filtering
+            filteredCount = restaurants.length;
+            
+            // Pagination
+            const page = criteria.page || 1;
+            const pageSize = criteria.pageSize || 10;
+            const start = (page - 1) * pageSize;
+            const end = start + pageSize;
+            const paginatedRestaurants = restaurants.slice(start, end);
+            
+            return {
+                restaurants: paginatedRestaurants,
+                pagination: {
+                    total: filteredCount,
+                    page,
+                    pageSize,
+                    pages: Math.ceil(filteredCount / pageSize)
+                }
+            };
         } catch (error) {
-            console.error('Error getting restaurant analytics:', error);
-            throw error;
+            ErrorHandlingService.handleError(error, 'Searching restaurants');
+            return { restaurants: [], pagination: { total: 0, page: 1, pageSize: 10, pages: 0 } };
         }
     }
-    
-    /**
-     * Helper to check if two dates are in the same period
-     * @param {Date} date1 - First date
-     * @param {Date} date2 - Second date
-     * @param {string} format - Period format ('day', 'month', 'year')
-     * @return {boolean} Whether dates are in the same period
-     */
-    function isSamePeriod(date1, date2, format) {
-        switch (format) {
-            case 'day':
-                return date1.getDate() === date2.getDate() && 
-                       date1.getMonth() === date2.getMonth() && 
-                       date1.getFullYear() === date2.getFullYear();
-            case 'month':
-                return date1.getMonth() === date2.getMonth() && 
-                       date1.getFullYear() === date2.getFullYear();
-            case 'year':
-                return date1.getFullYear() === date2.getFullYear();
-            default:
-                return false;
-        }
-    }
-    
+
     // Public API
     return {
         getAll,
         getById,
-        getWithRelations,
         create,
-        update,
-        deleteRestaurant,
-        saveWithRelations,
-        updateRestaurantConcepts,
-        saveRestaurantLocation,
+        getWithRelations,
         count,
         getStatusCounts,
-        getAnalytics
+        saveWithRelations,
+        saveConcepts,
+        search
     };
 })();

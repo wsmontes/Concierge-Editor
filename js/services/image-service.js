@@ -1,266 +1,145 @@
 /**
- * Image Service - Handles image data operations
- * Dependencies: BaseService, StorageModule
- * Provides comprehensive image management functionality
+ * Image Service - Manages image resources
+ * Dependencies: BaseService, StorageModule, ErrorHandlingService
+ * Provides image-specific business logic and data management
  */
 
-class ImageService extends BaseService {
-    /**
-     * Initialize the image service
-     */
-    constructor() {
-        super(StorageModule.STORES.IMAGES);
-        
-        // Additional stores used by this service
-        this.photosStore = StorageModule.STORES.PHOTOS;
-    }
-    
-    /**
-     * Save an image with metadata
-     * @param {Object} imageData - Image data and metadata
-     * @param {Blob|string} imageData.data - Image binary data or base64
-     * @param {string|number} imageData.restaurantId - Associated restaurant ID
-     * @param {string} [imageData.type] - Image type/category
-     * @return {Promise<Object>} - Promise with saved image reference
-     */
-    async saveImage(imageData) {
-        if (!imageData || !imageData.data) {
-            throw new Error('Image data is required');
-        }
-        
-        if (!imageData.restaurantId) {
-            throw new Error('Restaurant ID is required');
-        }
-        
-        try {
-            // Generate ID if not provided
-            const id = imageData.id || Date.now();
-            
-            // Save image data
-            await StorageModule.saveItem(this.storeName, {
-                id,
-                data: imageData.data,
-                timestamp: new Date().toISOString()
-            });
-            
-            // Create photo reference
-            const photoRef = {
-                id,
-                restaurantId: imageData.restaurantId,
-                photoDataRef: id.toString(),
-                timestamp: new Date().toISOString(),
-                type: imageData.type || 'general'
-            };
-            
-            await StorageModule.saveItem(this.photosStore, photoRef);
-            
-            return photoRef;
-        } catch (error) {
-            console.error('Error saving image:', error);
-            throw new Error(`Failed to save image: ${error.message}`);
-        }
-    }
+const ImageService = (function() {
+    // Create base service for photos
+    const baseService = BaseService.createService(
+        StorageModule.STORES.PHOTOS,
+        'photo'
+    );
     
     /**
      * Get images for a specific restaurant
-     * @param {string|number} restaurantId - Restaurant ID
-     * @return {Promise<Array>} - Promise with restaurant's images
+     * @param {number} restaurantId - Restaurant ID
+     * @returns {Promise<Array>} - Promise resolving to array of photos
      */
-    async getRestaurantImages(restaurantId) {
+    async function getRestaurantImages(restaurantId) {
         try {
-            // Get photo references for this restaurant
-            const photoRefs = await StorageModule.getItemsByIndex(
-                this.photosStore, 'restaurantId', restaurantId
+            return await StorageModule.getItemsByIndex(
+                StorageModule.STORES.PHOTOS,
+                'restaurantId',
+                parseInt(restaurantId)
             );
-            
-            if (photoRefs.length === 0) {
-                return [];
-            }
-            
-            // Get actual image data for each photo
-            const images = await Promise.all(photoRefs.map(async (photoRef) => {
-                try {
-                    const imageData = await StorageModule.getItem(this.storeName, photoRef.id);
-                    
-                    return {
-                        ...photoRef,
-                        url: imageData ? await this.getImageUrl(photoRef.id) : null,
-                        hasData: !!imageData
-                    };
-                } catch (error) {
-                    console.warn(`Error loading image ${photoRef.id}:`, error);
-                    
-                    return {
-                        ...photoRef,
-                        url: null,
-                        hasData: false,
-                        error: error.message
-                    };
-                }
-            }));
-            
-            return images;
         } catch (error) {
-            console.error(`Error getting images for restaurant ${restaurantId}:`, error);
-            throw new Error(`Failed to get restaurant images: ${error.message}`);
+            ErrorHandlingService.handleError(error, `Getting images for restaurant ${restaurantId}`);
+            return [];
         }
     }
     
     /**
-     * Get URL for an image
-     * @param {string|number} imageId - Image ID
-     * @return {Promise<string>} - Promise with image URL
+     * Save an image
+     * @param {number} restaurantId - Restaurant ID
+     * @param {Blob|File} imageData - Image data to save
+     * @param {Object} metadata - Optional metadata
+     * @returns {Promise<Object>} - Promise resolving to saved image info
      */
-    async getImageUrl(imageId) {
+    async function saveImage(restaurantId, imageData, metadata = {}) {
         try {
-            const image = await StorageModule.getItem(this.storeName, imageId);
+            // Create photo record
+            const photo = {
+                id: Date.now(),
+                restaurantId: parseInt(restaurantId),
+                timestamp: new Date().toISOString(),
+                ...metadata
+            };
             
-            if (!image || !image.data) {
+            // Store the photo record
+            await StorageModule.saveItem(StorageModule.STORES.PHOTOS, photo);
+            
+            // Store the image data in separate store
+            await StorageModule.saveItem(StorageModule.STORES.IMAGES, {
+                id: photo.id,
+                data: imageData,
+                restaurantId: parseInt(restaurantId)
+            });
+            
+            return photo;
+        } catch (error) {
+            ErrorHandlingService.handleError(error, 'Saving image');
+            throw error;
+        }
+    }
+    
+    /**
+     * Get image URL for display
+     * @param {number} imageId - Image ID
+     * @returns {Promise<string|null>} - Promise resolving to image URL or null
+     */
+    async function getImageURL(imageId) {
+        try {
+            const imageData = await StorageModule.getItem(StorageModule.STORES.IMAGES, parseInt(imageId));
+            
+            if (!imageData || !imageData.data) {
                 return null;
             }
             
-            // Handle different data formats
-            if (typeof image.data === 'string' && image.data.startsWith('data:')) {
-                // Already a data URL
-                return image.data;
-            }
-            
-            // Create object URL for Blob or ArrayBuffer
-            let blob;
-            if (image.data instanceof Blob) {
-                blob = image.data;
-            } else if (image.data instanceof ArrayBuffer) {
-                blob = new Blob([image.data]);
-            } else {
-                throw new Error('Unsupported image data format');
-            }
-            
-            return URL.createObjectURL(blob);
+            // Create object URL for the image data
+            return URL.createObjectURL(imageData.data);
         } catch (error) {
-            console.error(`Error getting URL for image ${imageId}:`, error);
-            throw new Error(`Failed to get image URL: ${error.message}`);
+            ErrorHandlingService.handleError(error, `Getting image URL for ${imageId}`);
+            return null;
         }
     }
     
     /**
-     * Delete an image and its reference
-     * @param {string|number} imageId - Image ID
-     * @return {Promise<boolean>} - Promise resolving to true if successful
+     * Delete an image
+     * @param {number} imageId - Image ID to delete
+     * @returns {Promise<boolean>} - Promise resolving to success flag
      */
-    async deleteImage(imageId) {
+    async function deleteImage(imageId) {
         try {
-            // Delete photo reference
-            await StorageModule.deleteItem(this.photosStore, imageId);
+            const id = parseInt(imageId);
             
-            // Delete actual image data
-            await StorageModule.deleteItem(this.storeName, imageId);
+            // Delete both the photo record and the image data
+            await Promise.all([
+                StorageModule.deleteItem(StorageModule.STORES.PHOTOS, id),
+                StorageModule.deleteItem(StorageModule.STORES.IMAGES, id)
+            ]);
             
             return true;
         } catch (error) {
-            console.error(`Error deleting image ${imageId}:`, error);
-            throw new Error(`Failed to delete image: ${error.message}`);
+            ErrorHandlingService.handleError(error, `Deleting image ${imageId}`);
+            return false;
         }
     }
     
     /**
      * Delete all images for a restaurant
-     * @param {string|number} restaurantId - Restaurant ID
-     * @return {Promise<Object>} - Promise with deletion results
+     * @param {number} restaurantId - Restaurant ID
+     * @returns {Promise<number>} - Promise resolving to count of deleted images
      */
-    async deleteRestaurantImages(restaurantId) {
+    async function deleteRestaurantImages(restaurantId) {
         try {
-            // Get photo references for this restaurant
-            const photoRefs = await StorageModule.getItemsByIndex(
-                this.photosStore, 'restaurantId', restaurantId
-            );
+            const photos = await getRestaurantImages(restaurantId);
+            const imageIds = photos.map(photo => photo.id);
             
-            if (photoRefs.length === 0) {
-                return { deleted: 0 };
-            }
-            
-            // Delete each image
-            const results = {
-                total: photoRefs.length,
-                deleted: 0,
-                failed: 0,
-                errors: []
-            };
-            
-            for (const photoRef of photoRefs) {
+            let deletedCount = 0;
+            for (const id of imageIds) {
                 try {
-                    await this.deleteImage(photoRef.id);
-                    results.deleted++;
-                } catch (error) {
-                    results.failed++;
-                    results.errors.push({
-                        id: photoRef.id,
-                        message: error.message
-                    });
+                    await deleteImage(id);
+                    deletedCount++;
+                } catch (innerError) {
+                    console.warn(`Error deleting image ${id}:`, innerError);
                 }
             }
             
-            return results;
+            return deletedCount;
         } catch (error) {
-            console.error(`Error deleting images for restaurant ${restaurantId}:`, error);
-            throw new Error(`Failed to delete restaurant images: ${error.message}`);
+            ErrorHandlingService.handleError(error, `Deleting images for restaurant ${restaurantId}`);
+            return 0;
         }
     }
     
-    /**
-     * Process image upload from File object
-     * @param {File} file - Image file
-     * @param {string|number} restaurantId - Associated restaurant ID
-     * @param {Object} options - Additional options
-     * @return {Promise<Object>} - Promise with processed image
-     */
-    async processImageUpload(file, restaurantId, options = {}) {
-        if (!file || !(file instanceof File || file instanceof Blob)) {
-            throw new Error('Valid image file is required');
-        }
-        
-        if (!restaurantId) {
-            throw new Error('Restaurant ID is required');
-        }
-        
-        try {
-            // Read file as ArrayBuffer
-            const imageBuffer = await this.readFileAsArrayBuffer(file);
-            
-            // Save the image
-            const imageRef = await this.saveImage({
-                data: imageBuffer,
-                restaurantId,
-                type: options.type || 'general'
-            });
-            
-            return imageRef;
-        } catch (error) {
-            console.error('Error processing image upload:', error);
-            throw new Error(`Failed to process image: ${error.message}`);
-        }
-    }
-    
-    /**
-     * Read a file as ArrayBuffer
-     * @param {File|Blob} file - File to read
-     * @return {Promise<ArrayBuffer>} - Promise with file data
-     */
-    readFileAsArrayBuffer(file) {
-        return new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            
-            reader.onload = () => {
-                resolve(reader.result);
-            };
-            
-            reader.onerror = () => {
-                reject(new Error('Failed to read file'));
-            };
-            
-            reader.readAsArrayBuffer(file);
-        });
-    }
-}
-
-// Singleton instance
-const imageService = new ImageService();
+    // Extend base service with image-specific methods
+    return {
+        ...baseService,
+        getRestaurantImages,
+        saveImage,
+        getImageURL,
+        deleteImage,
+        deleteRestaurantImages
+    };
+})();

@@ -1,188 +1,206 @@
 /**
- * Base Service - Foundation for all entity services
- * Dependencies: StorageModule for data persistence
- * Provides common data operations and error handling for specific entity services
+ * Base Service - Foundation class for all entity services
+ * Dependencies: StorageModule, ValidationService, ErrorHandlingService
+ * Provides common CRUD operations and utility methods for entity services
  */
 
-class BaseService {
+const BaseService = (function() {
     /**
-     * Initialize the base service
-     * @param {string} storeName - Name of the primary store this service manages
+     * Create a BaseService instance for an entity type
+     * @param {string} storeName - IndexedDB store name for the entity
+     * @param {string} entityName - Human-readable entity name for messages
+     * @param {Function} validateFunction - Validation function from ValidationService
+     * @return {Object} - Service instance with standard CRUD methods
      */
-    constructor(storeName) {
-        if (!storeName) {
-            throw new Error('Store name must be provided to BaseService');
+    function createService(storeName, entityName, validateFunction = null) {
+        /**
+         * Get all entities from storage
+         * @returns {Promise<Array>} - Promise resolving to array of entities
+         */
+        async function getAll() {
+            try {
+                return await StorageModule.getAllItems(storeName);
+            } catch (error) {
+                ErrorHandlingService.handleError(error, `Getting all ${entityName}`);
+                return [];
+            }
         }
         
-        this.storeName = storeName;
-    }
-    
-    /**
-     * Get all entities from the store
-     * @return {Promise<Array>} - Promise that resolves with array of entities
-     */
-    async getAll() {
-        try {
-            return await StorageModule.getAllItems(this.storeName);
-        } catch (error) {
-            console.error(`Error getting all items from ${this.storeName}:`, error);
-            throw new Error(`Failed to get ${this.storeName}: ${error.message}`);
-        }
-    }
-    
-    /**
-     * Get an entity by ID
-     * @param {string|number} id - ID of the entity to retrieve
-     * @return {Promise<Object>} - Promise that resolves with the entity
-     */
-    async getById(id) {
-        try {
-            const entity = await StorageModule.getItem(this.storeName, id);
-            if (!entity) {
-                throw new Error(`${this.storeName} with ID ${id} not found`);
+        /**
+         * Get entity by ID
+         * @param {number} id - Entity ID
+         * @returns {Promise<Object|null>} - Promise resolving to entity or null if not found
+         */
+        async function getById(id) {
+            try {
+                return await StorageModule.getItem(storeName, parseInt(id));
+            } catch (error) {
+                ErrorHandlingService.handleError(error, `Getting ${entityName} by ID ${id}`);
+                return null;
             }
-            return entity;
-        } catch (error) {
-            console.error(`Error getting ${this.storeName} ${id}:`, error);
-            throw new Error(`Failed to get ${this.storeName}: ${error.message}`);
         }
-    }
-    
-    /**
-     * Create a new entity
-     * @param {Object} data - Entity data
-     * @return {Promise<Object>} - Promise that resolves with the created entity
-     */
-    async create(data) {
-        try {
-            // Generate ID if not provided
-            const entityData = { ...data };
-            if (!entityData.id) {
-                entityData.id = Date.now();
+        
+        /**
+         * Create a new entity
+         * @param {Object} data - Entity data
+         * @returns {Promise<Object>} - Promise resolving to created entity
+         */
+        async function create(data) {
+            try {
+                // Validate if validation function provided
+                if (validateFunction) {
+                    const validationResult = validateFunction(data);
+                    if (!validationResult.valid) {
+                        throw new Error(`Invalid ${entityName}: ${validationResult.errors.join(', ')}`);
+                    }
+                }
+                
+                // Ensure entity has timestamp
+                if (!data.timestamp) {
+                    data.timestamp = new Date().toISOString();
+                }
+                
+                // Assign ID if not present
+                if (!data.id) {
+                    data.id = Date.now();
+                }
+                
+                // Save to storage
+                await StorageModule.saveItem(storeName, data);
+                return data;
+            } catch (error) {
+                ErrorHandlingService.handleError(error, `Creating ${entityName}`);
+                throw error;
             }
-            
-            // Add timestamp if not provided
-            if (!entityData.timestamp) {
-                entityData.timestamp = new Date().toISOString();
+        }
+        
+        /**
+         * Update an entity
+         * @param {number} id - Entity ID
+         * @param {Object} data - Updated entity data
+         * @returns {Promise<Object>} - Promise resolving to updated entity
+         */
+        async function update(id, data) {
+            try {
+                // Get existing entity
+                const existing = await getById(id);
+                if (!existing) {
+                    throw new Error(`${entityName} with ID ${id} not found`);
+                }
+                
+                // Merge data
+                const updated = { ...existing, ...data };
+                
+                // Validate if validation function provided
+                if (validateFunction) {
+                    const validationResult = validateFunction(updated);
+                    if (!validationResult.valid) {
+                        throw new Error(`Invalid ${entityName}: ${validationResult.errors.join(', ')}`);
+                    }
+                }
+                
+                // Save to storage
+                await StorageModule.saveItem(storeName, updated);
+                return updated;
+            } catch (error) {
+                ErrorHandlingService.handleError(error, `Updating ${entityName} ${id}`);
+                throw error;
             }
-            
-            const id = await StorageModule.saveItem(this.storeName, entityData);
-            return { ...entityData, id };
-        } catch (error) {
-            console.error(`Error creating ${this.storeName}:`, error);
-            throw new Error(`Failed to create ${this.storeName}: ${error.message}`);
         }
-    }
-    
-    /**
-     * Update an existing entity
-     * @param {string|number} id - ID of the entity to update
-     * @param {Object} data - Updated entity data
-     * @return {Promise<Object>} - Promise that resolves with the updated entity
-     */
-    async update(id, data) {
-        try {
-            // Get existing entity
-            const existingEntity = await StorageModule.getItem(this.storeName, id);
-            if (!existingEntity) {
-                throw new Error(`${this.storeName} with ID ${id} not found`);
+        
+        /**
+         * Delete an entity
+         * @param {number} id - Entity ID
+         * @returns {Promise<boolean>} - Promise resolving to success flag
+         */
+        async function deleteEntity(id) {
+            try {
+                await StorageModule.deleteItem(storeName, parseInt(id));
+                return true;
+            } catch (error) {
+                ErrorHandlingService.handleError(error, `Deleting ${entityName} ${id}`);
+                return false;
             }
-            
-            // Merge data, preserving ID
-            const updatedEntity = {
-                ...existingEntity,
-                ...data,
-                id,
-                lastModified: new Date().toISOString()
-            };
-            
-            await StorageModule.saveItem(this.storeName, updatedEntity);
-            return updatedEntity;
-        } catch (error) {
-            console.error(`Error updating ${this.storeName} ${id}:`, error);
-            throw new Error(`Failed to update ${this.storeName}: ${error.message}`);
         }
+        
+        /**
+         * Delete multiple entities
+         * @param {Array<number>} ids - Array of entity IDs
+         * @returns {Promise<number>} - Promise resolving to count of deleted entities
+         */
+        async function deleteMany(ids) {
+            try {
+                let count = 0;
+                for (const id of ids) {
+                    try {
+                        await StorageModule.deleteItem(storeName, parseInt(id));
+                        count++;
+                    } catch (innerError) {
+                        console.warn(`Error deleting ${entityName} ${id}:`, innerError);
+                    }
+                }
+                return count;
+            } catch (error) {
+                ErrorHandlingService.handleError(error, `Deleting multiple ${entityName}`);
+                return 0;
+            }
+        }
+        
+        /**
+         * Count all entities in store
+         * @returns {Promise<number>} - Promise resolving to count
+         */
+        async function count() {
+            try {
+                return await StorageModule.countItems(storeName);
+            } catch (error) {
+                ErrorHandlingService.handleError(error, `Counting ${entityName}`);
+                return 0;
+            }
+        }
+        
+        /**
+         * Import multiple entities
+         * @param {Array<Object>} items - Entities to import
+         * @returns {Promise<number>} - Promise resolving to count of imported entities
+         */
+        async function importAll(items) {
+            try {
+                if (!Array.isArray(items) || items.length === 0) {
+                    return 0;
+                }
+                
+                // Add timestamp if missing
+                const now = new Date().toISOString();
+                const preparedItems = items.map(item => ({
+                    ...item,
+                    timestamp: item.timestamp || now
+                }));
+                
+                // Save batch
+                await StorageModule.saveBatch(storeName, preparedItems);
+                return preparedItems.length;
+            } catch (error) {
+                ErrorHandlingService.handleError(error, `Importing ${entityName}`);
+                throw error;
+            }
+        }
+        
+        // Return service interface
+        return {
+            getAll,
+            getById,
+            create,
+            update,
+            delete: deleteEntity, // Use 'delete' as the public name
+            deleteMany,
+            count,
+            importAll
+        };
     }
     
-    /**
-     * Delete an entity
-     * @param {string|number} id - ID of the entity to delete
-     * @return {Promise<boolean>} - Promise that resolves with true if successful
-     */
-    async delete(id) {
-        try {
-            await StorageModule.deleteItem(this.storeName, id);
-            return true;
-        } catch (error) {
-            console.error(`Error deleting ${this.storeName} ${id}:`, error);
-            throw new Error(`Failed to delete ${this.storeName}: ${error.message}`);
-        }
-    }
-    
-    /**
-     * Get entities by a specific index value
-     * @param {string} indexName - Name of the index to query
-     * @param {*} indexValue - Value to search for
-     * @return {Promise<Array>} - Promise that resolves with matching entities
-     */
-    async getByIndex(indexName, indexValue) {
-        try {
-            return await StorageModule.getItemsByIndex(this.storeName, indexName, indexValue);
-        } catch (error) {
-            console.error(`Error getting ${this.storeName} by ${indexName}:`, error);
-            throw new Error(`Failed to query ${this.storeName}: ${error.message}`);
-        }
-    }
-    
-    /**
-     * Count entities in the store
-     * @return {Promise<number>} - Promise that resolves with the count
-     */
-    async count() {
-        try {
-            return await StorageModule.countItems(this.storeName);
-        } catch (error) {
-            console.error(`Error counting ${this.storeName}:`, error);
-            return 0;
-        }
-    }
-    
-    /**
-     * Save multiple entities in a batch
-     * @param {Array<Object>} entities - Array of entities to save
-     * @return {Promise<Array>} - Promise that resolves with array of saved entity IDs
-     */
-    async saveBatch(entities) {
-        try {
-            return await StorageModule.saveBatch(this.storeName, entities);
-        } catch (error) {
-            console.error(`Error batch saving ${this.storeName}:`, error);
-            throw new Error(`Failed to save ${this.storeName} batch: ${error.message}`);
-        }
-    }
-    
-    /**
-     * Clear all entities from the store
-     * @return {Promise<boolean>} - Promise that resolves with true if successful
-     */
-    async clearAll() {
-        try {
-            return await StorageModule.clearStore(this.storeName);
-        } catch (error) {
-            console.error(`Error clearing ${this.storeName}:`, error);
-            throw new Error(`Failed to clear ${this.storeName}: ${error.message}`);
-        }
-    }
-}
-
-// Export as both a class and a factory function for flexibility
-const BaseServiceFactory = {
-    /**
-     * Create a new instance of BaseService
-     * @param {string} storeName - Name of the store
-     * @return {BaseService} New service instance
-     */
-    create: function(storeName) {
-        return new BaseService(storeName);
-    }
-};
+    // Public API
+    return {
+        createService
+    };
+})();
