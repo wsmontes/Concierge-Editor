@@ -41,54 +41,9 @@ const UIModule = (function() {
     }
     
     /**
-     * Apply saved theme preference or use system preference
-     */
-    function applySavedTheme() {
-        const savedTheme = localStorage.getItem('theme');
-        
-        // Apply saved theme if available
-        if (savedTheme) {
-            document.documentElement.classList.toggle('dark-theme', savedTheme === 'dark');
-            updateThemeIcon(savedTheme === 'dark');
-        } 
-        // Otherwise use system preference
-        else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
-            document.documentElement.classList.add('dark-theme');
-            updateThemeIcon(true);
-        }
-        
-        // Listen for system theme changes if no saved preference
-        if (!savedTheme && window.matchMedia) {
-            window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', e => {
-                document.documentElement.classList.toggle('dark-theme', e.matches);
-                updateThemeIcon(e.matches);
-            });
-        }
-    }
-    
-    /**
-     * Update theme toggle icon based on current theme
-     * @param {boolean} isDarkMode - Whether dark mode is enabled
-     */
-    function updateThemeIcon(isDarkMode) {
-        const themeToggle = document.getElementById('theme-toggle');
-        if (!themeToggle) return;
-        
-        const themeIcon = themeToggle.querySelector('i') || themeToggle.querySelector('span');
-        if (themeIcon) {
-            if (themeIcon.classList.contains('material-icons')) {
-                themeIcon.textContent = isDarkMode ? 'light_mode' : 'dark_mode';
-            } else {
-                themeIcon.className = isDarkMode ? 'fas fa-sun' : 'fas fa-moon';
-            }
-        }
-    }
-    
-    /**
-     * Initialize toast notification container
+     * Initialize toast container if it doesn't exist
      */
     function initToastContainer() {
-        // Create toast container if it doesn't exist
         if (!document.getElementById('toast-container')) {
             const toastContainer = document.createElement('div');
             toastContainer.id = 'toast-container';
@@ -97,328 +52,394 @@ const UIModule = (function() {
     }
     
     /**
-     * Show a toast notification
-     * @param {string} message - Message to display
-     * @param {string} type - Toast type (info, success, warning, error)
-     * @param {number} duration - Duration to show toast in milliseconds
-     */
-    function showToast(message, type = 'info', duration = 3000) {
-        // Make sure container exists
-        initToastContainer();
-        const container = document.getElementById('toast-container');
-        
-        // Create toast element
-        const toast = document.createElement('div');
-        toast.className = `toast toast-${type}`;
-        
-        // Add animation class
-        toast.style.animationDuration = `${duration}ms`;
-        
-        // Create material icon based on type
-        let icon = 'info';
-        switch (type) {
-            case 'success': icon = 'check_circle'; break;
-            case 'error': icon = 'error'; break;
-            case 'warning': icon = 'warning'; break;
-        }
-        
-        // Set toast content with material icons
-        toast.innerHTML = `
-            <span class="material-icons">${icon}</span>
-            <div class="toast-content">${message}</div>
-            <button class="toast-close" aria-label="Close notification">
-                <span class="material-icons">close</span>
-            </button>
-            <div class="toast-progress"></div>
-        `;
-        
-        // Add close button functionality
-        const closeBtn = toast.querySelector('.toast-close');
-        if (closeBtn) {
-            closeBtn.addEventListener('click', () => {
-                closeToast(toast);
-            });
-        }
-        
-        // Add to container
-        container.appendChild(toast);
-        
-        // Start animation
-        setTimeout(() => {
-            toast.classList.add('show');
-        }, 10);
-        
-        // Set timeout for auto-removal
-        if (duration > 0) {
-            setTimeout(() => {
-                closeToast(toast);
-            }, duration);
-        }
-        
-        // Return toast element for potential later reference
-        return toast;
-    }
-    
-    /**
-     * Close a toast notification
-     * @param {HTMLElement} toast - Toast element to close
-     */
-    function closeToast(toast) {
-        if (!toast) return;
-        
-        // Add hiding animation
-        toast.classList.remove('show');
-        toast.classList.add('hide');
-        
-        // Remove element after animation completes
-        setTimeout(() => {
-            if (toast.parentNode) {
-                toast.parentNode.removeChild(toast);
-            }
-        }, 300); // Match animation duration in CSS
-    }
-    
-    /**
-     * Initialize tooltips for elements with 'data-tooltip' attribute
+     * Initialize tooltips on elements with data-tooltip attribute
      */
     function initTooltips() {
-        // Get all elements with tooltips
         const tooltipElements = document.querySelectorAll('[data-tooltip]');
         
         tooltipElements.forEach(element => {
-            // Show tooltip on hover
-            element.addEventListener('mouseenter', function() {
+            element.addEventListener('mouseenter', function(e) {
                 const tooltipText = this.getAttribute('data-tooltip');
                 if (!tooltipText) return;
                 
-                // Create tooltip
                 const tooltip = document.createElement('div');
                 tooltip.className = 'tooltip';
                 tooltip.textContent = tooltipText;
+                
                 document.body.appendChild(tooltip);
                 
-                // Position tooltip
                 const rect = this.getBoundingClientRect();
-                const tooltipHeight = tooltip.offsetHeight;
-                const tooltipWidth = tooltip.offsetWidth;
+                const tooltipRect = tooltip.getBoundingClientRect();
                 
-                tooltip.style.top = `${rect.top - tooltipHeight - 8 + window.scrollY}px`;
-                tooltip.style.left = `${rect.left + (rect.width / 2) - (tooltipWidth / 2) + window.scrollX}px`;
+                tooltip.style.top = (rect.top - tooltipRect.height - 10) + 'px';
+                tooltip.style.left = (rect.left + rect.width / 2 - tooltipRect.width / 2) + 'px';
                 
-                // Show tooltip with animation
-                setTimeout(() => {
-                    tooltip.classList.add('show');
-                }, 10);
+                // Handle tooltip going off-screen
+                const tooltipLeft = parseInt(tooltip.style.left);
+                if (tooltipLeft < 0) {
+                    tooltip.style.left = '5px';
+                } else if (tooltipLeft + tooltipRect.width > window.innerWidth) {
+                    tooltip.style.left = (window.innerWidth - tooltipRect.width - 5) + 'px';
+                }
                 
-                // Store reference to tooltip
-                this._tooltip = tooltip;
+                // Add to element for easy removal
+                this.tooltip = tooltip;
             });
             
-            // Hide tooltip when mouse leaves
             element.addEventListener('mouseleave', function() {
-                if (this._tooltip) {
-                    this._tooltip.classList.remove('show');
-                    setTimeout(() => {
-                        if (this._tooltip && this._tooltip.parentNode) {
-                            this._tooltip.parentNode.removeChild(this._tooltip);
-                            this._tooltip = null;
-                        }
-                    }, 200);
+                if (this.tooltip && this.tooltip.parentNode) {
+                    this.tooltip.parentNode.removeChild(this.tooltip);
+                    this.tooltip = null;
                 }
             });
         });
+    }
+    
+    /**
+     * Apply saved theme from localStorage
+     */
+    function applySavedTheme() {
+        const savedTheme = localStorage.getItem('theme');
+        if (savedTheme === 'dark') {
+            document.documentElement.classList.add('dark-theme');
+            
+            // Update theme toggle icon if it exists
+            const themeToggle = document.getElementById('theme-toggle');
+            if (themeToggle) {
+                const themeIcon = themeToggle.querySelector('i') || themeToggle.querySelector('span');
+                if (themeIcon) {
+                    if (themeIcon.classList.contains('material-icons')) {
+                        themeIcon.textContent = 'light_mode';
+                    } else {
+                        themeIcon.className = 'fas fa-sun';
+                    }
+                }
+            }
+        }
     }
     
     /**
      * Initialize accessibility features
      */
     function initAccessibilityFeatures() {
-        // Apply focus outlines when using keyboard navigation
+        // Show focus outlines only when using keyboard navigation
         document.addEventListener('keydown', function(e) {
             if (e.key === 'Tab') {
-                document.body.classList.add('keyboard-focus');
+                document.body.classList.add('keyboard-navigation');
             }
         });
         
-        // Remove focus outline when using mouse
         document.addEventListener('mousedown', function() {
-            document.body.classList.remove('keyboard-focus');
+            document.body.classList.remove('keyboard-navigation');
         });
         
-        // Check for reduced motion preference
-        if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-            document.documentElement.classList.add('reduced-motion');
-        }
+        // Add skip to content link for screen readers
+        const skipLink = document.createElement('a');
+        skipLink.href = '#main-content';
+        skipLink.className = 'skip-link';
+        skipLink.textContent = 'Skip to content';
+        document.body.insertBefore(skipLink, document.body.firstChild);
     }
     
     /**
-     * Show a loading spinner overlay
-     * @param {string} message - Optional message to display
-     * @return {Object} - Loading spinner controller
+     * Show a toast notification
+     * @param {string} message - The message to display
+     * @param {string} type - The type of toast (success, error, warning, info)
+     * @param {number} duration - How long to show the toast in ms (default: 3000)
      */
-    function showLoading(message = 'Loading...') {
-        const overlay = document.createElement('div');
-        overlay.className = 'loading-overlay';
+    function showToast(message, type = 'success', duration = 3000) {
+        console.log(`Toast (${type}): ${message}`); // Debug log
         
-        overlay.innerHTML = `
-            <div class="loading-spinner">
-                <div class="spinner"></div>
+        // Check if NotificationSystem exists
+        if (window.NotificationSystem) {
+            window.NotificationSystem.showNotification({
+                type: type,
+                message: message,
+                duration: duration
+            });
+            return;
+        }
+        
+        // Create toast container if it doesn't exist
+        let toastContainer = document.getElementById('toast-container');
+        if (!toastContainer) {
+            toastContainer = document.createElement('div');
+            toastContainer.id = 'toast-container';
+            document.body.appendChild(toastContainer);
+        }
+        
+        // Create toast element
+        const toast = document.createElement('div');
+        toast.className = `toast toast-${type}`;
+        
+        // Get icon based on type
+        let icon;
+        switch (type) {
+            case 'success':
+                icon = 'check_circle';
+                break;
+            case 'error':
+                icon = 'error';
+                break;
+            case 'warning':
+                icon = 'warning';
+                break;
+            case 'info':
+                icon = 'info';
+                break;
+            default:
+                icon = 'info';
+        }
+        
+        // Create toast content
+        toast.innerHTML = `
+            <div class="toast-content">
+                <i class="material-icons">${icon}</i>
+                <span class="toast-message">${message}</span>
             </div>
-            <div class="loading-message">${message}</div>
+            <button class="toast-close">
+                <i class="material-icons">close</i>
+            </button>
         `;
         
-        document.body.appendChild(overlay);
+        // Add to container
+        toastContainer.appendChild(toast);
         
-        // Return controller to hide or update spinner
-        return {
-            hide: function() {
-                overlay.classList.add('hide');
-                setTimeout(() => {
-                    if (overlay.parentNode) {
-                        overlay.parentNode.removeChild(overlay);
-                    }
-                }, 300);
-            },
-            updateMessage: function(newMessage) {
-                const messageElement = overlay.querySelector('.loading-message');
-                if (messageElement) {
-                    messageElement.textContent = newMessage;
-                }
+        // Add animation class after a small delay for transition effect
+        setTimeout(() => {
+            toast.classList.add('show');
+        }, 10);
+        
+        // Add close button functionality
+        const closeButton = toast.querySelector('.toast-close');
+        if (closeButton) {
+            closeButton.addEventListener('click', () => {
+                removeToast(toast);
+            });
+        }
+        
+        // Auto-remove after duration
+        setTimeout(() => {
+            removeToast(toast);
+        }, duration);
+    }
+    
+    /**
+     * Remove a toast element with animation
+     * @param {HTMLElement} toast - The toast element to remove
+     */
+    function removeToast(toast) {
+        toast.classList.remove('show');
+        toast.classList.add('hiding');
+        
+        // Remove after animation completes
+        setTimeout(() => {
+            if (toast.parentNode) {
+                toast.parentNode.removeChild(toast);
             }
-        };
+        }, 300);
     }
     
     /**
      * Show a confirmation dialog
-     * @param {string} message - Message to display
-     * @param {Object} options - Dialog options
-     * @return {Promise} - Resolves with true if confirmed, false if cancelled
+     * @param {Object} options - Dialog configuration options
+     * @param {string} options.title - Dialog title
+     * @param {string} options.message - Dialog message
+     * @param {string} options.confirmText - Text for confirm button (default: 'Confirm')
+     * @param {string} options.cancelText - Text for cancel button (default: 'Cancel')
+     * @param {string} options.confirmClass - CSS class for confirm button
+     * @param {Function} options.onConfirm - Callback when confirmed
+     * @param {Function} options.onCancel - Callback when cancelled
      */
-    function showConfirm(message, options = {}) {
-        return new Promise((resolve) => {
-            const defaults = {
-                title: 'Confirm',
-                confirmText: 'Confirm',
-                cancelText: 'Cancel',
-                type: 'info' // info, success, warning, error
-            };
-            
-            const settings = { ...defaults, ...options };
-            
-            // Create modal element
-            const modal = document.createElement('div');
-            modal.className = 'modal-overlay';
-            
-            // Set icon based on type
-            let icon = 'help';
-            switch (settings.type) {
-                case 'success': icon = 'check_circle'; break;
-                case 'error': icon = 'error'; break;
-                case 'warning': icon = 'warning'; break;
-                case 'info': icon = 'info'; break;
-            }
-            
-            modal.innerHTML = `
-                <div class="modal confirm-dialog ${settings.type}">
-                    <div class="modal-header">
-                        <h4>${settings.title}</h4>
-                    </div>
-                    <div class="modal-body">
-                        <div class="modal-icon">
-                            <span class="material-icons">${icon}</span>
-                        </div>
-                        <div class="modal-message">${message}</div>
-                    </div>
-                    <div class="modal-footer">
-                        <button class="btn btn-secondary cancel-btn">${settings.cancelText}</button>
-                        <button class="btn btn-primary confirm-btn">${settings.confirmText}</button>
-                    </div>
+    function showConfirmDialog(options) {
+        console.log('Showing confirm dialog:', options); // Debug log
+        
+        // Default options
+        const defaultOptions = {
+            title: 'Confirm Action',
+            message: 'Are you sure you want to proceed?',
+            confirmText: 'Confirm',
+            cancelText: 'Cancel',
+            confirmClass: 'btn-primary',
+            onConfirm: () => {},
+            onCancel: () => {}
+        };
+        
+        // Merge default options with provided options
+        const dialogOptions = { ...defaultOptions, ...options };
+        
+        // Create dialog container if it doesn't exist
+        let dialogContainer = document.getElementById('dialog-container');
+        if (!dialogContainer) {
+            dialogContainer = document.createElement('div');
+            dialogContainer.id = 'dialog-container';
+            document.body.appendChild(dialogContainer);
+        }
+        
+        // Create dialog element
+        const dialog = document.createElement('div');
+        dialog.className = 'confirm-dialog';
+        dialog.innerHTML = `
+            <div class="dialog-content">
+                <div class="dialog-header">
+                    <h3>${dialogOptions.title}</h3>
                 </div>
-            `;
-            
-            // Add to DOM
-            document.body.appendChild(modal);
-            
-            // Show with animation
-            setTimeout(() => {
-                modal.classList.add('show');
-                modal.querySelector('.confirm-dialog').classList.add('show');
-            }, 10);
-            
-            // Set up button event listeners
-            const confirmBtn = modal.querySelector('.confirm-btn');
-            const cancelBtn = modal.querySelector('.cancel-btn');
-            
-            confirmBtn.addEventListener('click', () => {
-                closeModal(modal);
-                resolve(true);
+                <div class="dialog-body">
+                    <p>${dialogOptions.message}</p>
+                </div>
+                <div class="dialog-footer">
+                    <button class="btn btn-secondary btn-cancel">${dialogOptions.cancelText}</button>
+                    <button class="btn ${dialogOptions.confirmClass}">${dialogOptions.confirmText}</button>
+                </div>
+            </div>
+        `;
+        
+        // Add to container
+        dialogContainer.innerHTML = '';
+        dialogContainer.appendChild(dialog);
+        dialogContainer.classList.add('active');
+        
+        // Handle confirm button click
+        const confirmButton = dialog.querySelector(`.btn.${dialogOptions.confirmClass}`);
+        if (confirmButton) {
+            confirmButton.addEventListener('click', () => {
+                dialogOptions.onConfirm();
+                closeDialog(dialogContainer);
             });
-            
-            cancelBtn.addEventListener('click', () => {
-                closeModal(modal);
-                resolve(false);
+        }
+        
+        // Handle cancel button click
+        const cancelButton = dialog.querySelector('.btn-cancel');
+        if (cancelButton) {
+            cancelButton.addEventListener('click', () => {
+                dialogOptions.onCancel();
+                closeDialog(dialogContainer);
             });
-            
-            // Close modal function
-            function closeModal(modal) {
-                modal.classList.remove('show');
-                modal.querySelector('.confirm-dialog').classList.remove('show');
-                
-                setTimeout(() => {
-                    if (modal.parentNode) {
-                        modal.parentNode.removeChild(modal);
-                    }
-                }, 300);
+        }
+        
+        // Handle click outside to cancel
+        dialogContainer.addEventListener('click', (e) => {
+            if (e.target === dialogContainer) {
+                dialogOptions.onCancel();
+                closeDialog(dialogContainer);
+            }
+        });
+        
+        // Add escape key to cancel
+        function handleKeyPress(e) {
+            if (e.key === 'Escape') {
+                dialogOptions.onCancel();
+                closeDialog(dialogContainer);
+                document.removeEventListener('keydown', handleKeyPress);
+            }
+        }
+        
+        document.addEventListener('keydown', handleKeyPress);
+    }
+    
+    /**
+     * Close and remove a dialog
+     * @param {HTMLElement} dialogContainer - The dialog container element
+     */
+    function closeDialog(dialogContainer) {
+        dialogContainer.classList.remove('active');
+        setTimeout(() => {
+            dialogContainer.innerHTML = '';
+        }, 300);
+    }
+    
+    /**
+     * Show a confirmation dialog
+     * @param {string} message - The message to show
+     * @param {Function} onConfirm - Callback function when confirmed
+     * @param {Function} onCancel - Callback function when cancelled
+     */
+    function showConfirmation(message, onConfirm, onCancel) {
+        // Create confirmation modal
+        const modalContainer = document.createElement('div');
+        modalContainer.className = 'modal-container';
+        
+        modalContainer.innerHTML = `
+            <div class="modal confirmation-modal">
+                <div class="modal-body">
+                    <p>${message}</p>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary cancel-btn">Cancel</button>
+                    <button class="btn btn-danger confirm-btn">Confirm</button>
+                </div>
+            </div>
+        `;
+        
+        document.body.appendChild(modalContainer);
+        
+        // Show with animation
+        setTimeout(() => {
+            modalContainer.classList.add('active');
+        }, 10);
+        
+        // Add button handlers
+        const cancelBtn = modalContainer.querySelector('.cancel-btn');
+        const confirmBtn = modalContainer.querySelector('.confirm-btn');
+        
+        cancelBtn.addEventListener('click', () => {
+            closeConfirmation(modalContainer);
+            if (typeof onCancel === 'function') {
+                onCancel();
+            }
+        });
+        
+        confirmBtn.addEventListener('click', () => {
+            closeConfirmation(modalContainer);
+            if (typeof onConfirm === 'function') {
+                onConfirm();
             }
         });
     }
     
     /**
-     * Apply UI enhancements to elements
-     * Call this when new content is dynamically added
+     * Close a confirmation dialog
+     * @param {HTMLElement} modalContainer - The modal container
      */
-    function enhanceUI() {
-        initTooltips();
-        
-        // Initialize custom selects
-        document.querySelectorAll('select:not(.enhanced)').forEach(select => {
-            select.classList.add('enhanced');
-            // Additional select enhancement could be added here
-        });
-        
-        // Initialize animated labels for inputs
-        document.querySelectorAll('.form-group:not(.enhanced)').forEach(group => {
-            group.classList.add('enhanced');
-            const input = group.querySelector('input, textarea, select');
-            const label = group.querySelector('label');
-            
-            if (input && label) {
-                // Check initial state
-                if (input.value !== '') {
-                    label.classList.add('active');
-                }
-                
-                // Add focus event
-                input.addEventListener('focus', () => {
-                    label.classList.add('active');
-                });
-                
-                // Add blur event
-                input.addEventListener('blur', () => {
-                    if (input.value === '') {
-                        label.classList.remove('active');
-                    }
-                });
-            }
-        });
+    function closeConfirmation(modalContainer) {
+        modalContainer.classList.remove('active');
+        setTimeout(() => {
+            document.body.removeChild(modalContainer);
+        }, 300);
     }
-
+    
+    /**
+     * Show loading spinner
+     * @param {string} message - Optional loading message
+     * @return {Object} - Control object with hide method
+     */
+    function showLoading(message = 'Loading...') {
+        const loadingContainer = document.createElement('div');
+        loadingContainer.className = 'loading-container';
+        
+        loadingContainer.innerHTML = `
+            <div class="loading-spinner"></div>
+            <p>${message}</p>
+        `;
+        
+        document.body.appendChild(loadingContainer);
+        
+        return {
+            hide: () => {
+                document.body.removeChild(loadingContainer);
+            },
+            updateMessage: (newMessage) => {
+                loadingContainer.querySelector('p').textContent = newMessage;
+            }
+        };
+    }
+    
     // Public API
     return {
         init: init,
         showToast: showToast,
-        showLoading: showLoading,
-        showConfirm: showConfirm,
-        enhanceUI: enhanceUI
+        showConfirmDialog: showConfirmDialog,
+        showConfirmation: showConfirmation,
+        showLoading: showLoading
     };
 })();

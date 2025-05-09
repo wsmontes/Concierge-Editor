@@ -54,6 +54,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (advancedSearchBtn) {
                     advancedSearchBtn.classList.remove('active');
                 }
+                
+                // Show success notification
+                if (typeof UIModule !== 'undefined' && UIModule.showToast) {
+                    UIModule.showToast('Search filters applied', 'success');
+                }
             }
         });
     }

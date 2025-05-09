@@ -1,484 +1,473 @@
 /**
  * Import/Export Module - Handles data import and export functionality
- * Dependencies: JSZip, UIModule, DataModule, StorageModule, RestaurantModule
+ * Dependencies: ServiceRegistry, UIUtils, ErrorHandlingService
+ * Provides UI for importing and exporting application data
  */
 
 const ImportExportModule = (function() {
-    /**
-     * Initialize import/export functionality
-     */
+    // DOM Elements
+    const importFileInput = document.getElementById('import-file');
+    const importDataBtn = document.getElementById('import-data');
+    const selectedFileDisplay = document.getElementById('selected-file');
+    const importStatusContainer = document.getElementById('import-status');
+    const progressBarContainer = document.querySelector('.progress-bar-container');
+    const progressBar = document.querySelector('.progress-bar');
+    const exportAllDataBtn = document.getElementById('export-all-data');
+    const exportFormatSelect = document.getElementById('export-format');
+    const recentImportsList = document.getElementById('import-history');
+    
+    // Initialize
     function init() {
-        const importButton = document.getElementById('import-data');
-        const exportButton = document.getElementById('export-data');
-        const importFileInput = document.getElementById('import-file');
-        const exportAllButton = document.getElementById('export-all-data');
-        
-        if (importButton && importFileInput) {
-            importButton.addEventListener('click', function() {
+        bindEventListeners();
+        loadImportHistory();
+    }
+    
+    function bindEventListeners() {
+        // Import file selection
+        if (importDataBtn) {
+            importDataBtn.addEventListener('click', () => {
                 importFileInput.click();
             });
-            
-            importFileInput.addEventListener('change', function(e) {
-                if (this.files && this.files.length > 0) {
-                    const file = this.files[0];
-                    const fileType = file.name.split('.').pop().toLowerCase();
-                    
-                    // Update UI with file name
-                    const selectedFileElement = document.getElementById('selected-file');
-                    if (selectedFileElement) {
-                        selectedFileElement.textContent = file.name;
-                    }
-                    
-                    // Show import progress UI
-                    const importStatus = document.getElementById('import-status');
-                    const progressContainer = document.querySelector('.progress-bar-container');
-                    const progressBar = document.querySelector('.progress-bar');
-                    
-                    if (importStatus) {
-                        importStatus.textContent = 'Preparing to import data...';
-                        importStatus.style.display = 'block';
-                    }
-                    
-                    if (progressContainer) {
-                        progressContainer.style.display = 'block';
-                    }
-                    
-                    if (progressBar) {
-                        progressBar.style.width = '0%';
-                    }
-                    
-                    if (fileType === 'json') {
-                        // Handle JSON import
-                        handleJsonImport(file, updateProgress);
-                    } else if (fileType === 'zip') {
-                        // Handle ZIP import
-                        handleZipImport(file, updateProgress);
-                    } else {
-                        UIModule.showToast('Unsupported file format. Please upload a JSON or ZIP file.', 'error');
-                    }
-                }
-            });
         }
         
-        if (exportButton) {
-            exportButton.addEventListener('click', function() {
-                // Get selected restaurants
-                const selectedRestaurants = RestaurantModule.getSelectedRestaurants();
-                
-                if (selectedRestaurants.length > 0) {
-                    exportRestaurantData(selectedRestaurants);
-                } else {
-                    UIModule.showToast('Please select at least one restaurant to export', 'info');
-                }
-            });
+        if (importFileInput) {
+            importFileInput.addEventListener('change', handleImportFileSelection);
         }
         
-        if (exportAllButton) {
-            exportAllButton.addEventListener('click', function() {
-                // Get all restaurants
-                const restaurants = JSON.parse(localStorage.getItem('restaurants') || '[]');
-                const restaurantIds = restaurants.map(r => r.id);
-                
-                if (restaurantIds.length > 0) {
-                    exportRestaurantData(restaurantIds);
-                } else {
-                    UIModule.showToast('No restaurants found to export', 'info');
-                }
-            });
-        }
-    }
-
-    /**
-     * Update progress bar during import
-     * @param {number} value - Progress value (0-100)
-     * @param {string} statusText - Optional status text
-     */
-    function updateProgress(value, statusText) {
-        const progressBar = document.querySelector('.progress-bar');
-        if (progressBar) {
-            progressBar.style.width = `${value}%`;
+        // Export data
+        if (exportAllDataBtn) {
+            exportAllDataBtn.addEventListener('click', handleExportData);
         }
         
-        if (statusText) {
-            const importStatus = document.getElementById('import-status');
-            if (importStatus) {
-                importStatus.textContent = statusText;
+        // Delegate clicks on bulk export in restaurant section
+        document.body.addEventListener('click', function(e) {
+            if (e.target && e.target.id === 'bulk-export') {
+                handleBulkExport();
             }
-        }
+        });
     }
     
-    /**
-     * Handle JSON file import
-     * @param {File} file - The JSON file to import
-     * @param {Function} progressCallback - Callback for progress updates
-     */
-    function handleJsonImport(file, progressCallback) {
-        progressCallback(10, 'Reading JSON file...');
+    // Handle file selection for import
+    function handleImportFileSelection(event) {
+        const file = event.target.files[0];
         
-        const reader = new FileReader();
-        
-        reader.onload = function(e) {
-            try {
-                progressCallback(20, 'Parsing JSON data...');
-                const data = JSON.parse(e.target.result);
-                
-                // Validate the data structure
-                if (!DataModule.validateImportData(data)) {
-                    UIModule.showToast('Invalid data format. Please check your import file.', 'error');
-                    progressCallback(0, 'Import failed: Invalid data format');
-                    return;
-                }
-                
-                progressCallback(40, 'Validating data structure...');
-                
-                // Process and store the imported data
-                DataModule.processImportedData(data)
-                    .then(() => {
-                        progressCallback(90, 'Finalizing import...');
-                        
-                        // Record in import history
-                        addToImportHistory({
-                            fileName: file.name,
-                            timestamp: new Date().toISOString(),
-                            recordCount: {
-                                restaurants: data.restaurants ? data.restaurants.length : 0,
-                                concepts: data.concepts ? data.concepts.length : 0,
-                                photos: 0
-                            }
-                        });
-                        
-                        progressCallback(100, 'Import completed successfully');
-                        
-                        setTimeout(() => {
-                            // Hide progress UI after a delay
-                            const progressContainer = document.querySelector('.progress-bar-container');
-                            if (progressContainer) {
-                                progressContainer.style.display = 'none';
-                            }
-                            
-                            UIModule.showToast('Data imported successfully!', 'success');
-                            RestaurantModule.updateRestaurantListings();
-                        }, 1000);
-                    })
-                    .catch(error => {
-                        console.error('Import error:', error);
-                        UIModule.showToast('Error importing data: ' + error.message, 'error');
-                        progressCallback(0, 'Import failed: ' + error.message);
-                    });
-                
-            } catch (error) {
-                console.error('Parse error:', error);
-                UIModule.showToast('Error parsing JSON file: ' + error.message, 'error');
-                progressCallback(0, 'Import failed: Parse error');
-            }
-        };
-        
-        reader.onerror = function() {
-            UIModule.showToast('Error reading file', 'error');
-            progressCallback(0, 'Import failed: File read error');
-        };
-        
-        reader.readAsText(file);
-    }
-
-    /**
-     * Handle ZIP file import containing JSON data and images
-     * @param {File} file - The ZIP file to import
-     * @param {Function} progressCallback - Callback for progress updates
-     */
-    async function handleZipImport(file, progressCallback) {
-        try {
-            progressCallback(5, 'Loading ZIP file...');
-            
-            // Initialize database for storing images
-            await StorageModule.initDatabase();
-            
-            progressCallback(10, 'Extracting ZIP contents...');
-            const zip = new JSZip();
-            const zipContents = await zip.loadAsync(file);
-            
-            // Look for JSON file at root level
-            let jsonFile = null;
-            let jsonFileName = null;
-            
-            // Find the JSON data file (typically data.json or similar)
-            for (const fileName in zipContents.files) {
-                if (fileName.endsWith('.json') && !fileName.includes('/')) {
-                    jsonFileName = fileName;
-                    jsonFile = zipContents.files[fileName];
-                    break;
-                }
-            }
-            
-            if (!jsonFile) {
-                UIModule.showToast('No JSON data file found in ZIP archive', 'error');
-                progressCallback(0, 'Import failed: No JSON data found');
-                return;
-            }
-            
-            // Read and parse the JSON file
-            progressCallback(15, `Reading JSON data from ${jsonFileName}...`);
-            const jsonContent = await jsonFile.async('text');
-            const data = JSON.parse(jsonContent);
-            
-            // Validate the data structure
-            if (!DataModule.validateImportData(data)) {
-                UIModule.showToast('Invalid data format in JSON file', 'error');
-                progressCallback(0, 'Import failed: Invalid data format');
-                return;
-            }
-            
-            // Process image references if present
-            let imagesToProcess = [];
-            if (data.restaurantPhotos && data.restaurantPhotos.length > 0) {
-                progressCallback(20, 'Processing image references...');
-                
-                // Build a list of images to extract
-                imagesToProcess = data.restaurantPhotos.map(photo => ({
-                    id: photo.id.toString(),
-                    restaurantId: photo.restaurantId,
-                    photoDataRef: photo.photoDataRef,
-                    filePath: photo.photoDataRef // Path inside ZIP
-                }));
-                
-                progressCallback(25, `Found ${imagesToProcess.length} images to extract`);
-            }
-            
-            // Process and store the JSON data
-            progressCallback(30, 'Storing restaurant data...');
-            await DataModule.processImportedData(data);
-            
-            // Extract and store images
-            if (imagesToProcess.length > 0) {
-                progressCallback(50, 'Extracting images from ZIP...');
-                
-                let processedImages = 0;
-                const totalImages = imagesToProcess.length;
-                
-                for (const imageInfo of imagesToProcess) {
-                    // Update progress for each image
-                    const imageProgress = 50 + Math.floor((processedImages / totalImages) * 40);
-                    progressCallback(imageProgress, `Extracting image ${processedImages + 1} of ${totalImages}...`);
-                    
-                    // Get the image file from the ZIP
-                    const imageFile = zipContents.files[imageInfo.filePath];
-                    
-                    if (imageFile) {
-                        try {
-                            // Extract the image as a blob
-                            const imageBlob = await imageFile.async('blob');
-                            
-                            // Store the image in IndexedDB
-                            await StorageModule.storeImage({
-                                id: imageInfo.id,
-                                restaurantId: imageInfo.restaurantId,
-                                photoDataRef: imageInfo.photoDataRef,
-                                blob: imageBlob
-                            });
-                            
-                            processedImages++;
-                        } catch (imageError) {
-                            console.error(`Error processing image ${imageInfo.filePath}:`, imageError);
-                            // Continue with other images
-                        }
-                    } else {
-                        console.warn(`Image file not found in ZIP: ${imageInfo.filePath}`);
-                    }
-                }
-                
-                progressCallback(90, `Successfully extracted ${processedImages} of ${totalImages} images`);
-            }
-            
-            // Record in import history
-            addToImportHistory({
-                fileName: file.name,
-                timestamp: new Date().toISOString(),
-                recordCount: {
-                    restaurants: data.restaurants ? data.restaurants.length : 0,
-                    concepts: data.concepts ? data.concepts.length : 0,
-                    photos: imagesToProcess.length
-                }
-            });
-            
-            progressCallback(100, 'Import completed successfully');
-            
-            setTimeout(() => {
-                // Hide progress UI after a delay
-                const progressContainer = document.querySelector('.progress-bar-container');
-                if (progressContainer) {
-                    progressContainer.style.display = 'none';
-                }
-                
-                UIModule.showToast('ZIP data imported successfully!', 'success');
-                
-                // Update UI
-                RestaurantModule.updateRestaurantListings();
-                updateImportHistoryUI();
-            }, 1000);
-            
-        } catch (error) {
-            console.error('ZIP import error:', error);
-            UIModule.showToast('Error importing ZIP file: ' + error.message, 'error');
-            progressCallback(0, 'Import failed: ' + error.message);
-        }
-    }
-    
-    /**
-     * Add an entry to the import history
-     * @param {Object} importInfo - Information about the import
-     */
-    function addToImportHistory(importInfo) {
-        const history = JSON.parse(localStorage.getItem('importHistory') || '[]');
-        history.unshift(importInfo); // Add to beginning of array
-        
-        // Limit history size
-        if (history.length > 10) {
-            history.length = 10;
-        }
-        
-        localStorage.setItem('importHistory', JSON.stringify(history));
-        
-        // Update the UI
-        updateImportHistoryUI();
-    }
-    
-    /**
-     * Update the import history UI
-     */
-    function updateImportHistoryUI() {
-        const historyContainer = document.getElementById('import-history');
-        if (!historyContainer) return;
-        
-        const history = JSON.parse(localStorage.getItem('importHistory') || '[]');
-        
-        if (history.length === 0) {
-            historyContainer.innerHTML = '<li class="empty-list">No import history available</li>';
+        if (!file) {
+            selectedFileDisplay.textContent = 'No file selected';
             return;
         }
         
-        historyContainer.innerHTML = '';
+        selectedFileDisplay.textContent = file.name;
         
-        history.forEach(item => {
-            const date = new Date(item.timestamp).toLocaleString();
-            const historyItem = document.createElement('li');
-            historyItem.innerHTML = `
-                <div class="activity-item">
-                    <div class="activity-icon"><i class="fas fa-file-import"></i></div>
-                    <div class="activity-details">
-                        <h4>${item.fileName}</h4>
-                        <p>Imported ${item.recordCount.restaurants} restaurants, ${item.recordCount.concepts} concepts, ${item.recordCount.photos} photos</p>
-                        <span class="activity-time">${date}</span>
-                    </div>
-                </div>
-            `;
-            historyContainer.appendChild(historyItem);
-        });
+        // Show progress UI
+        importStatusContainer.style.display = 'block';
+        importStatusContainer.textContent = 'Preparing to import data...';
+        progressBarContainer.style.display = 'block';
+        progressBar.style.width = '10%';
+        
+        // Determine if it's a JSON or ZIP file
+        if (file.name.endsWith('.json')) {
+            processJSONImport(file);
+        } else if (file.name.endsWith('.zip')) {
+            processZIPImport(file);
+        } else {
+            showImportError('Unsupported file format. Please select a JSON or ZIP file.');
+        }
     }
-
-    /**
-     * Export restaurant data to JSON
-     * @param {Array} restaurantIds - Array of restaurant IDs to export
-     */
-    function exportRestaurantData(restaurantIds) {
-        // Fetch all the necessary data
-        const restaurants = JSON.parse(localStorage.getItem('restaurants') || '[]')
-            .filter(r => restaurantIds.includes(r.id));
-        
-        const restaurantConcepts = JSON.parse(localStorage.getItem('restaurantConcepts') || '[]')
-            .filter(rc => restaurantIds.includes(rc.restaurantId));
-        
-        const conceptIds = restaurantConcepts.map(rc => rc.conceptId);
-        const concepts = JSON.parse(localStorage.getItem('concepts') || '[]')
-            .filter(c => conceptIds.includes(c.id));
-        
-        const curatorIds = [...new Set(restaurants.map(r => r.curatorId))];
-        const curators = JSON.parse(localStorage.getItem('curators') || '[]')
-            .filter(c => curatorIds.includes(c.id));
-        
-        const locations = JSON.parse(localStorage.getItem('restaurantLocations') || '[]')
-            .filter(l => restaurantIds.includes(l.restaurantId));
-        
-        // Get the export format
-        const exportFormat = document.getElementById('export-format')?.value || 'json';
-        
-        if (exportFormat === 'json') {
-            // Compile export data
-            const exportData = {
-                restaurants: restaurants,
-                restaurantConcepts: restaurantConcepts,
-                concepts: concepts,
-                curators: curators,
-                restaurantLocations: locations
-            };
+    
+    // Process JSON import
+    async function processJSONImport(file) {
+        try {
+            // Update status
+            importStatusContainer.textContent = 'Reading JSON file...';
+            progressBar.style.width = '20%';
             
-            // Create and download the file
-            const dataStr = JSON.stringify(exportData, null, 2);
-            const dataBlob = new Blob([dataStr], {type: 'application/json'});
-            const url = URL.createObjectURL(dataBlob);
+            // Read the file
+            const fileContent = await readFileAsText(file);
+            progressBar.style.width = '40%';
             
-            const downloadLink = document.createElement('a');
-            downloadLink.href = url;
-            downloadLink.download = 'restaurant_export_' + new Date().toISOString().split('T')[0] + '.json';
-            document.body.appendChild(downloadLink);
-            downloadLink.click();
-            document.body.removeChild(downloadLink);
+            // Parse JSON
+            importStatusContainer.textContent = 'Parsing data...';
+            const jsonData = JSON.parse(fileContent);
+            progressBar.style.width = '60%';
             
-            UIModule.showToast(`Exported ${restaurants.length} restaurants successfully`, 'success');
-        } else if (exportFormat === 'csv') {
-            // Generate CSV format (simplified for now)
-            exportCSV(restaurants, concepts, restaurantConcepts);
+            // Validate and process data using ServiceRegistry instead of BusinessLogicModule
+            importStatusContainer.textContent = 'Importing data into database...';
+            
+            // Get required services
+            const restaurantService = ServiceRegistry.getRestaurantService();
+            const conceptService = ServiceRegistry.getConceptService();
+            const curatorService = ServiceRegistry.getCuratorService();
+            
+            // Import data using services
+            const result = await importData(jsonData);
+            progressBar.style.width = '100%';
+            
+            if (result.success) {
+                showImportSuccess(result);
+            } else {
+                showImportError(result.message);
+            }
+            
+            // Refresh import history
+            loadImportHistory();
+            
+            // Update dashboard statistics if available
+            if (typeof DashboardModule !== 'undefined' && typeof DashboardModule.refreshDashboard === 'function') {
+                DashboardModule.refreshDashboard();
+            }
+        } catch (error) {
+            ErrorHandlingService.handleError(error, 'Processing JSON import');
+            showImportError(`Error importing data: ${error.message}`);
         }
     }
     
     /**
-     * Export data in CSV format
-     * @param {Array} restaurants - Restaurant data
-     * @param {Array} concepts - Concept data
-     * @param {Array} restaurantConcepts - Restaurant-concept relationships
+     * Import data using service layer
+     * @param {Object} data - Data to import
+     * @return {Promise<Object>} Import result
      */
-    function exportCSV(restaurants, concepts, restaurantConcepts) {
-        // Create restaurant CSV with linked concepts
-        let csv = 'Restaurant ID,Name,Curator ID,Timestamp,Description,Concepts\n';
-        
-        restaurants.forEach(restaurant => {
-            // Get concepts for this restaurant
-            const restaurantConceptIds = restaurantConcepts
-                .filter(rc => rc.restaurantId === restaurant.id)
-                .map(rc => rc.conceptId);
-                
-            const restaurantConceptValues = concepts
-                .filter(c => restaurantConceptIds.includes(c.id))
-                .map(c => `${c.category}: ${c.value}`);
-                
-            // Escape fields with quotes if they contain commas
-            const escapedName = restaurant.name.includes(',') ? `"${restaurant.name}"` : restaurant.name;
-            const escapedDesc = restaurant.description ? 
-                (restaurant.description.includes(',') ? `"${restaurant.description}"` : restaurant.description) : '';
-            const escapedConcepts = restaurantConceptValues.length > 0 ? 
-                `"${restaurantConceptValues.join('; ')}"` : '';
-                
-            csv += `${restaurant.id},${escapedName},${restaurant.curatorId},${restaurant.timestamp},${escapedDesc},${escapedConcepts}\n`;
-        });
-        
-        // Create and download CSV file
-        const dataBlob = new Blob([csv], {type: 'text/csv'});
-        const url = URL.createObjectURL(dataBlob);
-        
-        const downloadLink = document.createElement('a');
-        downloadLink.href = url;
-        downloadLink.download = 'restaurant_export_' + new Date().toISOString().split('T')[0] + '.csv';
-        document.body.appendChild(downloadLink);
-        downloadLink.click();
-        document.body.removeChild(downloadLink);
-        
-        UIModule.showToast(`Exported ${restaurants.length} restaurants to CSV`, 'success');
+    async function importData(data) {
+        try {
+            // Get needed services
+            const storageService = ServiceRegistry.getStorageService();
+            
+            // Process each data type using appropriate service
+            const stats = {
+                restaurants: 0,
+                concepts: 0,
+                curators: 0,
+                photos: 0,
+                imagesProcessed: 0
+            };
+            
+            // Import restaurants if present
+            if (data.restaurants && Array.isArray(data.restaurants)) {
+                const restaurantService = ServiceRegistry.getRestaurantService();
+                await restaurantService.importAll(data.restaurants);
+                stats.restaurants = data.restaurants.length;
+            }
+            
+            // Import concepts if present
+            if (data.concepts && Array.isArray(data.concepts)) {
+                const conceptService = ServiceRegistry.getConceptService();
+                await conceptService.importAll(data.concepts);
+                stats.concepts = data.concepts.length;
+            }
+            
+            // Other imports...
+            
+            return {
+                success: true,
+                message: 'Data imported successfully',
+                stats
+            };
+        } catch (error) {
+            console.error('Error importing data:', error);
+            return {
+                success: false,
+                message: `Import failed: ${error.message}`
+            };
+        }
     }
-
+    
+    // Process ZIP import (contains JSON + images)
+    async function processZIPImport(file) {
+        try {
+            // Check if JSZip is available
+            if (typeof JSZip !== 'function') {
+                throw new Error('JSZip library is required but not available');
+            }
+            
+            // Update status
+            importStatusContainer.textContent = 'Reading ZIP file...';
+            progressBar.style.width = '20%';
+            
+            // Read the file
+            const zipInstance = new JSZip();
+            const zipContent = await zipInstance.loadAsync(file);
+            progressBar.style.width = '30%';
+            
+            // Look for data.json or similar file
+            let jsonFile;
+            zipContent.forEach((path, entry) => {
+                if (path.endsWith('.json') && !jsonFile) {
+                    jsonFile = entry;
+                }
+            });
+            
+            if (!jsonFile) {
+                throw new Error('No JSON data file found in ZIP archive');
+            }
+            
+            // Read and parse JSON file
+            importStatusContainer.textContent = 'Parsing data file...';
+            const jsonData = JSON.parse(await jsonFile.async('string'));
+            progressBar.style.width = '50%';
+            
+            // Add metadata with original filename
+            jsonData.metadata = jsonData.metadata || {};
+            jsonData.metadata.filename = file.name;
+            
+            // Process the data with the ZIP file for images using BusinessLogicModule
+            importStatusContainer.textContent = 'Importing data and processing images...';
+            const result = await BusinessLogicModule.importData(jsonData, file);
+            progressBar.style.width = '100%';
+            
+            if (result.success) {
+                showImportSuccess(result);
+            } else {
+                showImportError(result.message);
+            }
+            
+            // Refresh import history
+            loadImportHistory();
+            
+            // Update dashboard statistics if available
+            if (typeof DashboardModule !== 'undefined' && typeof DashboardModule.refreshDashboard === 'function') {
+                DashboardModule.refreshDashboard();
+            }
+        } catch (error) {
+            ErrorHandlingService.handleError(error, 'Processing ZIP import');
+            showImportError(`Error processing ZIP file: ${error.message}`);
+        }
+    }
+    
+    // Utility to read file as text
+    function readFileAsText(file) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = (e) => resolve(e.target.result);
+            reader.onerror = (e) => reject(e.target.error);
+            reader.readAsText(file);
+        });
+    }
+    
+    // Show import success message and stats
+    function showImportSuccess(result) {
+        importStatusContainer.innerHTML = `
+            <div class="success-message">
+                <i class="fas fa-check-circle"></i>
+                <span>${result.message}</span>
+            </div>
+            <div class="import-stats">
+                <div>Restaurants: ${result.stats.restaurants || 0}</div>
+                <div>Concepts: ${result.stats.concepts || 0}</div>
+                <div>Photos: ${result.stats.photos || 0}</div>
+                <div>Images processed: ${result.stats.imagesProcessed || 0}</div>
+                ${result.stats.imageErrors > 0 ? `<div class="error-text">Image errors: ${result.stats.imageErrors}</div>` : ''}
+            </div>
+        `;
+        
+        // Show notification
+        UIUtils.showNotification(`Import successful: ${result.stats.restaurants || 0} restaurants, ${result.stats.imagesProcessed || 0} images`, 'success');
+        
+        // Reset file input to allow importing the same file again
+        importFileInput.value = '';
+    }
+    
+    // Show import error message
+    function showImportError(message) {
+        progressBar.style.width = '100%';
+        progressBarContainer.classList.add('error');
+        
+        importStatusContainer.innerHTML = `
+            <div class="error-message">
+                <i class="fas fa-exclamation-circle"></i>
+                <span>${ValidationService.sanitizeString(message)}</span>
+            </div>
+        `;
+        
+        // Show notification
+        UIUtils.showNotification(`Import failed: ${message}`, 'error');
+        
+        // Reset file input after a few seconds
+        setTimeout(() => {
+            importFileInput.value = '';
+            progressBarContainer.classList.remove('error');
+        }, 5000);
+    }
+    
+    // Load and display import history
+    function loadImportHistory() {
+        // This will be handled by an API from BusinessLogicModule in the future
+        // For now, we'll just show the history from localStorage
+        if (!recentImportsList) return;
+        
+        const importHistory = JSON.parse(localStorage.getItem('importHistory') || '[]');
+        
+        if (importHistory.length === 0) {
+            recentImportsList.innerHTML = '<li class="empty-list">No import history available</li>';
+            
+            // Also update recent imports on dashboard if it exists
+            const dashboardRecentImports = document.getElementById('recent-imports');
+            if (dashboardRecentImports) {
+                dashboardRecentImports.innerHTML = '<li class="empty-list">No recent imports</li>';
+            }
+            return;
+        }
+        
+        // Update import history panel
+        recentImportsList.innerHTML = importHistory.map(entry => `
+            <li class="activity-item">
+                <div class="activity-icon"><i class="fas fa-file-import"></i></div>
+                <div class="activity-details">
+                    <div class="activity-title">${ValidationService.sanitizeString(entry.filename)}</div>
+                    <div class="activity-meta">
+                        ${new Date(entry.timestamp).toLocaleString()}
+                    </div>
+                    <div class="activity-stats">
+                        ${entry.stats.restaurants} restaurants, ${entry.stats.concepts} concepts, ${entry.stats.imagesProcessed || 0} images
+                    </div>
+                </div>
+            </li>
+        `).join('');
+        
+        // Update recent imports on dashboard if it exists
+        const dashboardRecentImports = document.getElementById('recent-imports');
+        if (dashboardRecentImports) {
+            dashboardRecentImports.innerHTML = importHistory.slice(0, 5).map(entry => `
+                <li class="activity-item">
+                    <div class="activity-icon"><i class="fas fa-file-import"></i></div>
+                    <div class="activity-details">
+                        <div class="activity-title">${ValidationService.sanitizeString(entry.filename)}</div>
+                        <div class="activity-meta">
+                            ${new Date(entry.timestamp).toLocaleString()}
+                        </div>
+                    </div>
+                </li>
+            `).join('');
+        }
+    }
+    
+    // Handle export all data
+    async function handleExportData() {
+        try {
+            if (exportAllDataBtn) {
+                exportAllDataBtn.disabled = true;
+                exportAllDataBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Exporting...';
+            }
+            
+            // Get all data from services instead of BusinessLogicModule
+            const storageService = ServiceRegistry.getStorageService();
+            const data = await storageService.exportAllData();
+            
+            // Handle different export formats
+            const format = exportFormatSelect ? exportFormatSelect.value : 'json';
+            let exportData, filename, mimeType;
+            
+            if (format === 'csv') {
+                exportData = convertToCSV(data);
+                filename = `concierge-export-${new Date().toISOString().slice(0,10)}.csv`;
+                mimeType = 'text/csv';
+            } else {
+                exportData = JSON.stringify(data, null, 2);
+                filename = `concierge-export-${new Date().toISOString().slice(0,10)}.json`;
+                mimeType = 'application/json';
+            }
+            
+            // Create download
+            downloadFile(exportData, filename, mimeType);
+            
+            // Show notification
+            UIUtils.showNotification(`Data exported successfully as ${format.toUpperCase()}`, 'success');
+        } catch (error) {
+            ErrorHandlingService.handleError(error, 'Exporting data');
+            UIUtils.showNotification(`Export failed: ${error.message}`, 'error');
+        } finally {
+            if (exportAllDataBtn) {
+                exportAllDataBtn.disabled = false;
+                exportAllDataBtn.innerHTML = '<i class="fas fa-file-export"></i> Export All Data';
+            }
+        }
+    }
+    
+    // Handle bulk export (selected restaurants)
+    async function handleBulkExport() {
+        try {
+            // Get selected restaurants from RestaurantModule
+            if (typeof RestaurantModule === 'undefined' || typeof RestaurantModule.getSelectedRestaurants !== 'function') {
+                throw new Error('Restaurant selection functionality not available');
+            }
+            
+            const selectedIds = RestaurantModule.getSelectedRestaurants();
+            
+            if (!selectedIds || selectedIds.length === 0) {
+                UIUtils.showNotification('Please select restaurants to export', 'warning');
+                return;
+            }
+            
+            // Show notification
+            UIUtils.showNotification(`Preparing export of ${selectedIds.length} restaurants...`, 'info');
+            
+            // Export only the selected restaurants using service
+            const restaurantService = ServiceRegistry.getRestaurantService();
+            const data = await restaurantService.exportSelected(selectedIds);
+            
+            // Create download
+            const filename = `concierge-export-selected-${selectedIds.length}-restaurants-${new Date().toISOString().slice(0,10)}.json`;
+            downloadFile(JSON.stringify(data, null, 2), filename, 'application/json');
+            
+            // Show success notification
+            UIUtils.showNotification(`Exported ${selectedIds.length} restaurants successfully`, 'success');
+            
+        } catch (error) {
+            ErrorHandlingService.handleError(error, 'Bulk export restaurants');
+            UIUtils.showNotification(`Export failed: ${error.message}`, 'error');
+        }
+    }
+    
+    // Utility to download file
+    function downloadFile(content, filename, mimeType) {
+        const blob = new Blob([content], { type: mimeType });
+        const url = URL.createObjectURL(blob);
+        
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        
+        setTimeout(() => {
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }, 100);
+    }
+    
+    // Convert data to CSV format (basic implementation)
+    function convertToCSV(data) {
+        // Placeholder implementation - would need to be more sophisticated for real use
+        let csv = '';
+        
+        // Handle restaurants
+        if (data.restaurants && data.restaurants.length > 0) {
+            // Get headers from first object
+            const headers = Object.keys(data.restaurants[0]).join(',');
+            csv += 'Restaurants\n' + headers + '\n';
+            
+            // Add data rows
+            data.restaurants.forEach(restaurant => {
+                csv += Object.values(restaurant).map(value => {
+                    // Handle commas in values
+                    if (typeof value === 'string' && value.includes(',')) {
+                        return `"${value}"`;
+                    }
+                    return value;
+                }).join(',') + '\n';
+            });
+            
+            csv += '\n';
+        }
+        
+        // Repeat for other data types...
+        
+        return csv;
+    }
+    
     // Public API
     return {
-        init: init,
-        handleJsonImport: handleJsonImport,
-        handleZipImport: handleZipImport,
-        updateImportHistoryUI: updateImportHistoryUI
+        init,
+        handleImportFileSelection,
+        handleExportData,
+        handleBulkExport
     };
 })();

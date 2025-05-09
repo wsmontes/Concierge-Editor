@@ -1,14 +1,14 @@
 /**
- * Storage Module - Handles all data storage using IndexedDB
+ * Storage Module - Low-level database abstraction layer
  * Dependencies: idb library for IndexedDB interactions
- * Provides a complete abstraction layer for database operations
+ * Provides generic database operations without domain-specific knowledge
  */
 
 const StorageModule = (function() {
     const DB_NAME = 'concierge-editor';
-    const DB_VERSION = 2; // Increased version to trigger upgrade
+    const DB_VERSION = 2;
     
-    // Object store names
+    // Object store names - these remain as constants for external reference
     const STORES = {
         IMAGES: 'restaurantImages',
         RESTAURANTS: 'restaurants',
@@ -63,7 +63,6 @@ const StorageModule = (function() {
                     const rcStore = db.createObjectStore(STORES.RESTAURANT_CONCEPTS, { keyPath: 'id' });
                     rcStore.createIndex('restaurantId', 'restaurantId', { unique: false });
                     rcStore.createIndex('conceptId', 'conceptId', { unique: false });
-                    // Compound index for uniqueness validation
                     rcStore.createIndex('restaurant_concept', ['restaurantId', 'conceptId'], { unique: true });
                 }
                 
@@ -98,27 +97,19 @@ const StorageModule = (function() {
      * @return {Promise} - Promise that resolves with the item's ID
      */
     async function saveItem(storeName, item) {
-        if (!db) await initDatabase();
+        await initDatabase();
         
         return new Promise((resolve, reject) => {
-            try {
-                const transaction = db.transaction([storeName], 'readwrite');
-                const store = transaction.objectStore(storeName);
-                
-                const request = store.put(item);
-                
-                request.onsuccess = function() {
-                    resolve(request.result);
-                };
-                
-                request.onerror = function(event) {
-                    console.error(`Error saving item to ${storeName}:`, event.target.error);
-                    reject(event.target.error);
-                };
-            } catch (error) {
-                console.error(`Error in saveItem (${storeName}):`, error);
-                reject(error);
-            }
+            const transaction = db.transaction([storeName], 'readwrite');
+            const store = transaction.objectStore(storeName);
+            const request = store.put(item);
+            
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = () => reject(request.error);
+            
+            transaction.oncomplete = () => {
+                console.log(`Item saved in ${storeName}`);
+            };
         });
     }
     
@@ -158,33 +149,21 @@ const StorageModule = (function() {
     }
     
     /**
-     * Generic function to delete an item from a store
+     * Delete an item from a store
      * @param {string} storeName - Name of the store
-     * @param {string|number} id - ID of the item
-     * @return {Promise} - Promise that resolves when item is deleted
+     * @param {string|number} id - ID of the item to delete
+     * @return {Promise} - Promise that resolves when deletion is complete
      */
     async function deleteItem(storeName, id) {
-        if (!db) await initDatabase();
+        await initDatabase();
         
         return new Promise((resolve, reject) => {
-            try {
-                const transaction = db.transaction([storeName], 'readwrite');
-                const store = transaction.objectStore(storeName);
-                
-                const request = store.delete(id);
-                
-                request.onsuccess = function() {
-                    resolve(true);
-                };
-                
-                request.onerror = function(event) {
-                    console.error(`Error deleting item from ${storeName}:`, event.target.error);
-                    reject(event.target.error);
-                };
-            } catch (error) {
-                console.error(`Error in deleteItem (${storeName}):`, error);
-                reject(error);
-            }
+            const transaction = db.transaction([storeName], 'readwrite');
+            const store = transaction.objectStore(storeName);
+            const request = store.delete(id);
+            
+            request.onsuccess = () => resolve();
+            request.onerror = () => reject(request.error);
         });
     }
     
@@ -194,28 +173,21 @@ const StorageModule = (function() {
      * @return {Promise<Array>} - Promise that resolves with array of items
      */
     async function getAllItems(storeName) {
-        if (!db) await initDatabase();
-        
-        return new Promise((resolve, reject) => {
-            try {
+        try {
+            await initDatabase();
+            
+            return new Promise((resolve, reject) => {
                 const transaction = db.transaction([storeName], 'readonly');
                 const store = transaction.objectStore(storeName);
-                
                 const request = store.getAll();
                 
-                request.onsuccess = function() {
-                    resolve(request.result || []);
-                };
-                
-                request.onerror = function(event) {
-                    console.error(`Error getting all items from ${storeName}:`, event.target.error);
-                    reject(event.target.error);
-                };
-            } catch (error) {
-                console.error(`Error in getAllItems (${storeName}):`, error);
-                reject(error);
-            }
-        });
+                request.onsuccess = () => resolve(request.result);
+                request.onerror = () => reject(request.error);
+            });
+        } catch (error) {
+            console.error(`Error in getAllItems(${storeName}):`, error);
+            return [];
+        }
     }
     
     /**
@@ -323,249 +295,47 @@ const StorageModule = (function() {
     }
     
     /**
-     * Process imported data and store in IndexedDB
-     * @param {Object} data - Data to import
-     * @return {Promise} - Promise that resolves when import is complete
+     * Run multiple operations in a single transaction
+     * @param {Array<string>} storeNames - Names of stores to include in transaction
+     * @param {string} mode - Transaction mode ('readonly' or 'readwrite')
+     * @param {Function} callback - Function that performs operations on the transaction
+     * @return {Promise} - Promise that resolves with the result of the callback
      */
-    async function processImportedData(data) {
-        if (!data) {
-            return Promise.reject(new Error('No data provided'));
-        }
+    async function runTransaction(storeNames, mode, callback) {
+        await initDatabase();
         
-        // Basic validation
-        if (!data.restaurants && !data.concepts) {
-            return Promise.reject(new Error('Invalid data format'));
-        }
-        
-        try {
-            await initDatabase();
-            
-            // Import curators
-            if (data.curators && Array.isArray(data.curators)) {
-                const existingCurators = await getAllItems(STORES.CURATORS);
-                const mergedCurators = mergeArraysById(existingCurators, data.curators);
-                await saveBatch(STORES.CURATORS, mergedCurators);
-            }
-            
-            // Import concepts
-            if (data.concepts && Array.isArray(data.concepts)) {
-                const existingConcepts = await getAllItems(STORES.CONCEPTS);
-                const mergedConcepts = mergeArraysById(existingConcepts, data.concepts);
-                await saveBatch(STORES.CONCEPTS, mergedConcepts);
-            }
-            
-            // Import restaurants
-            if (data.restaurants && Array.isArray(data.restaurants)) {
-                const existingRestaurants = await getAllItems(STORES.RESTAURANTS);
-                const mergedRestaurants = mergeArraysById(existingRestaurants, data.restaurants);
-                await saveBatch(STORES.RESTAURANTS, mergedRestaurants);
-            }
-            
-            // Import restaurant concepts
-            if (data.restaurantConcepts && Array.isArray(data.restaurantConcepts)) {
-                const existingRC = await getAllItems(STORES.RESTAURANT_CONCEPTS);
-                const mergedRC = mergeRelationships(existingRC, data.restaurantConcepts);
-                await saveBatch(STORES.RESTAURANT_CONCEPTS, mergedRC);
-            }
-            
-            // Import restaurant locations
-            if (data.restaurantLocations && Array.isArray(data.restaurantLocations)) {
-                const existingLocations = await getAllItems(STORES.LOCATIONS);
-                const mergedLocations = mergeArraysById(existingLocations, data.restaurantLocations);
-                await saveBatch(STORES.LOCATIONS, mergedLocations);
-            }
-            
-            // Import photo references
-            if (data.restaurantPhotos && Array.isArray(data.restaurantPhotos)) {
-                const existingPhotos = await getAllItems(STORES.PHOTOS);
-                const mergedPhotos = mergeArraysById(existingPhotos, data.restaurantPhotos);
-                await saveBatch(STORES.PHOTOS, mergedPhotos);
-            }
-            
-            return {
-                success: true,
-                message: 'Data imported successfully',
-                stats: {
-                    curators: data.curators?.length || 0,
-                    concepts: data.concepts?.length || 0,
-                    restaurants: data.restaurants?.length || 0,
-                    restaurantConcepts: data.restaurantConcepts?.length || 0,
-                    locations: data.restaurantLocations?.length || 0,
-                    photos: data.restaurantPhotos?.length || 0
-                }
-            };
-        } catch (error) {
-            console.error('Error processing import:', error);
-            return Promise.reject(new Error('Failed to process import: ' + error.message));
-        }
-    }
-    
-    /**
-     * Merge two arrays of objects by ID, newer objects replace older ones
-     * @param {Array} existingArray - Existing array of objects
-     * @param {Array} newArray - New array of objects
-     * @return {Array} - Merged array
-     */
-    function mergeArraysById(existingArray, newArray) {
-        // Create a map of existing items by ID
-        const itemMap = new Map();
-        
-        // Add existing items to map
-        existingArray.forEach(item => {
-            if (item.id) {
-                itemMap.set(item.id, item);
-            }
-        });
-        
-        // Update/add new items
-        newArray.forEach(item => {
-            if (item.id) {
-                itemMap.set(item.id, item);
-            }
-        });
-        
-        // Convert map back to array
-        return Array.from(itemMap.values());
-    }
-    
-    /**
-     * Merge restaurant-concept relationships, avoiding duplicates
-     * @param {Array} existingRelationships - Existing relationships
-     * @param {Array} newRelationships - New relationships
-     * @return {Array} - Merged relationships
-     */
-    function mergeRelationships(existingRelationships, newRelationships) {
-        // Create a set of existing relationship keys
-        const relationshipSet = new Set();
-        const result = [...existingRelationships];
-        
-        // Add existing relationships to set
-        existingRelationships.forEach(rel => {
-            const key = `${rel.restaurantId}-${rel.conceptId}`;
-            relationshipSet.add(key);
-        });
-        
-        // Add new relationships if they don't already exist
-        newRelationships.forEach(rel => {
-            const key = `${rel.restaurantId}-${rel.conceptId}`;
-            if (!relationshipSet.has(key)) {
-                relationshipSet.add(key);
-                result.push(rel);
-            }
-        });
-        
-        return result;
-    }
-    
-    // Image-specific functions (keep existing functionality)
-    
-    /**
-     * Store an image in the database
-     * @param {Object} image - Image data object
-     * @param {string} image.id - Unique ID for the image
-     * @param {number} image.restaurantId - ID of the restaurant
-     * @param {string} image.photoDataRef - Reference to image data
-     * @param {Blob} image.blob - Image blob data
-     * @return {Promise} - Promise that resolves when image is stored
-     */
-    async function storeImage(image) {
-        return saveItem(STORES.IMAGES, image);
-    }
-    
-    /**
-     * Get an image by ID
-     * @param {string} id - ID of the image to retrieve
-     * @return {Promise<Object>} - Promise that resolves with the image data
-     */
-    async function getImage(id) {
-        return getItem(STORES.IMAGES, id);
-    }
-    
-    /**
-     * Delete an image by ID
-     * @param {string} id - ID of the image to delete
-     * @return {Promise} - Promise that resolves when image is deleted
-     */
-    async function deleteImage(id) {
-        return deleteItem(STORES.IMAGES, id);
-    }
-    
-    /**
-     * Get all images in the database
-     * @return {Promise<Array>} - Promise that resolves with array of image data
-     */
-    async function getAllImages() {
-        return getAllItems(STORES.IMAGES);
-    }
-    
-    /**
-     * Get all images for a specific restaurant
-     * @param {number} restaurantId - ID of the restaurant
-     * @return {Promise<Array>} - Promise that resolves with array of image data
-     */
-    async function getRestaurantImages(restaurantId) {
-        return getItemsByIndex(STORES.IMAGES, 'restaurantId', restaurantId);
-    }
-    
-    /**
-     * Delete all images for specific restaurants
-     * @param {Array} restaurantIds - Array of restaurant IDs
-     * @return {Promise} - Promise that resolves when images are deleted
-     */
-    async function deleteRestaurantImages(restaurantIds) {
-        if (!Array.isArray(restaurantIds) || restaurantIds.length === 0) {
-            return Promise.resolve(true);
-        }
-        
-        try {
-            const allPromises = [];
-            
-            for (const restaurantId of restaurantIds) {
-                const images = await getRestaurantImages(restaurantId);
+        return new Promise((resolve, reject) => {
+            try {
+                const transaction = db.transaction(storeNames, mode);
+                let result;
                 
-                for (const image of images) {
-                    allPromises.push(deleteImage(image.id));
-                }
-            }
-            
-            await Promise.all(allPromises);
-            return true;
-        } catch (error) {
-            console.error('Error deleting restaurant images:', error);
-            return Promise.reject(error);
-        }
-    }
-    
-    /**
-     * Get a URL for an image that can be used in img src
-     * @param {string} id - ID of the image
-     * @param {boolean} useFallback - Whether to use fallback image when not found
-     * @return {Promise<string|null>} - Promise that resolves with the image URL or null
-     */
-    async function getImageURL(id, useFallback = true) {
-        try {
-            const image = await getImage(id);
-            if (image && image.blob) {
-                return URL.createObjectURL(image.blob);
-            }
-            
-            // Instead of throwing, check if we should use fallback
-            if (useFallback) {
-                // Try to get image reference from localStorage as fallback
-                const photos = JSON.parse(localStorage.getItem('restaurantPhotos') || '[]');
-                const photoData = photos.find(p => p.id.toString() === id.toString());
+                transaction.oncomplete = function() {
+                    resolve(result);
+                };
                 
-                if (photoData && photoData.photoDataRef) {
-                    // If we have a reference, return a placeholder based on category
-                    return `/assets/placeholders/restaurant-default.jpg`;
+                transaction.onerror = function(event) {
+                    console.error('Transaction error:', event.target.error);
+                    reject(event.target.error);
+                };
+                
+                // Allow transaction to be used by callback
+                const stores = {};
+                storeNames.forEach(name => {
+                    stores[name] = transaction.objectStore(name);
+                });
+                
+                try {
+                    result = callback(stores, transaction);
+                } catch (error) {
+                    console.error('Error in transaction callback:', error);
+                    transaction.abort();
+                    reject(error);
                 }
-                return `/assets/placeholders/image-placeholder.jpg`;
+            } catch (error) {
+                console.error('Error creating transaction:', error);
+                reject(error);
             }
-            return null;
-        } catch (error) {
-            console.warn(`Unable to load image ${id}:`, error);
-            return useFallback ? `/assets/placeholders/image-placeholder.jpg` : null;
-        }
+        });
     }
     
     /**
@@ -574,104 +344,120 @@ const StorageModule = (function() {
      * @return {Promise<number>} - Promise that resolves with the count
      */
     async function countItems(storeName) {
-        if (!db) await initDatabase();
-        
-        return new Promise((resolve, reject) => {
-            try {
-                const transaction = db.transaction([storeName], 'readonly');
-                const store = transaction.objectStore(storeName);
-                
-                const request = store.count();
-                
-                request.onsuccess = function() {
-                    resolve(request.result || 0);
-                };
-                
-                request.onerror = function(event) {
-                    console.error(`Error counting items in ${storeName}:`, event.target.error);
-                    reject(event.target.error);
-                };
-            } catch (error) {
-                console.error(`Error in countItems (${storeName}):`, error);
-                reject(error);
-            }
-        });
-    }
-
-    /**
-     * Export all data from the database in JSON format
-     * @return {Promise<Object>} - Promise that resolves with exported data
-     */
-    async function exportAllData() {
         try {
             await initDatabase();
             
-            const restaurants = await getAllItems(STORES.RESTAURANTS);
-            const concepts = await getAllItems(STORES.CONCEPTS);
-            const restaurantConcepts = await getAllItems(STORES.RESTAURANT_CONCEPTS);
-            const restaurantLocations = await getAllItems(STORES.LOCATIONS);
-            const restaurantPhotos = await getAllItems(STORES.PHOTOS);
-            const curators = await getAllItems(STORES.CURATORS);
-            
-            return {
-                restaurants,
-                concepts,
-                restaurantConcepts,
-                restaurantLocations,
-                restaurantPhotos,
-                curators
-            };
+            return new Promise((resolve, reject) => {
+                const transaction = db.transaction([storeName], 'readonly');
+                const store = transaction.objectStore(storeName);
+                const request = store.count();
+                
+                request.onsuccess = () => resolve(request.result);
+                request.onerror = () => reject(request.error);
+            });
         } catch (error) {
-            console.error('Error exporting data:', error);
-            return Promise.reject(new Error('Failed to export data: ' + error.message));
-        }
-    }
-
-    /**
-     * Delete restaurants and all associated data
-     * @param {Array} restaurantIds - Array of restaurant IDs to delete
-     * @return {Promise} - Promise that resolves when deletion is complete
-     */
-    async function deleteRestaurants(restaurantIds) {
-        if (!Array.isArray(restaurantIds) || restaurantIds.length === 0) {
-            return Promise.resolve(true);
-        }
-        
-        try {
-            // Delete images first
-            await deleteRestaurantImages(restaurantIds);
-            
-            // Delete related data
-            for (const restaurantId of restaurantIds) {
-                // Delete concepts relationships
-                const concepts = await getItemsByIndex(STORES.RESTAURANT_CONCEPTS, 'restaurantId', restaurantId);
-                for (const concept of concepts) {
-                    await deleteItem(STORES.RESTAURANT_CONCEPTS, concept.id);
-                }
-                
-                // Delete location
-                const locations = await getItemsByIndex(STORES.LOCATIONS, 'restaurantId', restaurantId);
-                for (const location of locations) {
-                    await deleteItem(STORES.LOCATIONS, location.id);
-                }
-                
-                // Delete photo references
-                const photos = await getItemsByIndex(STORES.PHOTOS, 'restaurantId', restaurantId);
-                for (const photo of photos) {
-                    await deleteItem(STORES.PHOTOS, photo.id);
-                }
-                
-                // Delete restaurant
-                await deleteItem(STORES.RESTAURANTS, restaurantId);
-            }
-            
-            return true;
-        } catch (error) {
-            console.error('Error deleting restaurants:', error);
-            return Promise.reject(error);
+            console.error(`Error in countItems(${storeName}):`, error);
+            return 0;
         }
     }
     
+    /**
+     * Import data into multiple stores
+     * @param {Object} data - Object containing arrays of items to import, keyed by store name
+     * @return {Promise<Object>} - Promise that resolves with import statistics
+     */
+    async function importData(data) {
+        if (!data || typeof data !== 'object') {
+            return Promise.reject(new Error('Invalid import data'));
+        }
+        
+        try {
+            await initDatabase();
+            const stats = {};
+            
+            // Import data to each store
+            const promises = Object.keys(data).map(async storeName => {
+                // Skip if not a valid store
+                if (!STORES[storeName] && !Object.values(STORES).includes(storeName)) {
+                    return;
+                }
+                
+                // Skip if not an array
+                if (!Array.isArray(data[storeName])) {
+                    return;
+                }
+                
+                // Merge with existing data
+                const existingItems = await getAllItems(storeName);
+                const itemMap = new Map();
+                
+                // Add existing items to map
+                existingItems.forEach(item => {
+                    if (item.id) {
+                        itemMap.set(item.id, item);
+                    }
+                });
+                
+                // Update/add new items
+                data[storeName].forEach(item => {
+                    if (item.id) {
+                        itemMap.set(item.id, item);
+                    }
+                });
+                
+                // Convert map back to array
+                const mergedItems = Array.from(itemMap.values());
+                
+                // Save batch
+                await saveBatch(storeName, mergedItems);
+                
+                // Track stats
+                stats[storeName] = data[storeName].length;
+            });
+            
+            await Promise.all(promises);
+            
+            return { 
+                success: true,
+                message: 'Data imported successfully',
+                stats
+            };
+        } catch (error) {
+            console.error('Error importing data:', error);
+            return Promise.reject(new Error(`Import failed: ${error.message}`));
+        }
+    }
+    
+    /**
+     * Export all data from all stores
+     * @param {Array<string>} [storeNames] - Optional specific stores to export (defaults to all)
+     * @return {Promise<Object>} - Promise that resolves with exported data
+     */
+    async function exportData(storeNames) {
+        try {
+            await initDatabase();
+            
+            // Use provided store names or all stores
+            const storesToExport = storeNames || Object.values(STORES);
+            
+            // Export each store
+            const exportPromises = storesToExport.map(async storeName => {
+                const items = await getAllItems(storeName);
+                return [storeName, items];
+            });
+            
+            const exportedArrays = await Promise.all(exportPromises);
+            
+            // Convert to object
+            const exportedData = Object.fromEntries(exportedArrays);
+            
+            return exportedData;
+        } catch (error) {
+            console.error('Error exporting data:', error);
+            return Promise.reject(new Error(`Export failed: ${error.message}`));
+        }
+    }
+
     // Public API
     return {
         // Database initialization
@@ -686,22 +472,11 @@ const StorageModule = (function() {
         clearStore,
         saveBatch,
         countItems,
+        runTransaction,
         
-        // Data import/export
-        processImportedData,
-        exportAllData,
-        
-        // Image-specific operations
-        storeImage,
-        getImage,
-        deleteImage,
-        getAllImages,
-        getRestaurantImages,
-        deleteRestaurantImages,
-        getImageURL,
-        
-        // Restaurant operations
-        deleteRestaurants,
+        // Import/Export
+        importData,
+        exportData,
         
         // Store constants for external reference
         STORES

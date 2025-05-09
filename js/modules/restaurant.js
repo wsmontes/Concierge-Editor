@@ -1,6 +1,6 @@
 /**
- * Restaurant Module - Handles restaurant listings, viewing, editing, and deletion
- * Dependencies: UIModule for toast notifications, DataModule for data operations, StorageModule for image handling
+ * Restaurant Module - Handles restaurant listings, viewing, and deletion
+ * Dependencies: UIModule, ServiceRegistry, RestaurantService, ConceptService, CuratorService
  */
 
 const RestaurantModule = (function() {
@@ -17,14 +17,34 @@ const RestaurantModule = (function() {
     let itemsPerPage = 12; // Default items per page
     let totalItems = 0;
     let totalPages = 0;
+    
+    // Selection tracking
+    let selectedRestaurants = [];
+    
+    // Service references
+    let restaurantService;
+    let conceptService;
+    let imageService;
+    let locationService;
+    let curatorService;
 
     /**
      * Initialize restaurant functionality
      */
     function init() {
+        // Get service references
+        restaurantService = ServiceRegistry.getRestaurantService();
+        conceptService = ServiceRegistry.getConceptService();
+        imageService = ServiceRegistry.getImageService();
+        locationService = ServiceRegistry.getLocationService();
+        curatorService = ServiceRegistry.getCuratorService();
+        
+        // Initialize UI components
         initRestaurantListings();
         initViewModes();
         initPagination();
+        initBulkActions();
+        initSelectionHandling();
     }
     
     /**
@@ -324,72 +344,77 @@ const RestaurantModule = (function() {
         // Show loading state
         restaurantListContainer.innerHTML = '<div class="loading-state"><i class="fas fa-spinner fa-spin"></i> Loading restaurants...</div>';
         
-        // Get restaurants data
-        let restaurants = JSON.parse(localStorage.getItem('restaurants') || '[]');
-        
-        // Apply filters based on search criteria or standard filters
-        restaurants = applyFilters(restaurants, searchCriteria, statusOption, filterOption);
-        
-        // Apply sort
-        restaurants = applySorting(restaurants, sortOption);
-        
-        // Calculate pagination
-        totalItems = restaurants.length;
-        totalPages = Math.ceil(totalItems / itemsPerPage);
-        if (currentPage > totalPages) currentPage = totalPages || 1;
-        
-        // Get current page of restaurants
-        const startIndex = (currentPage - 1) * itemsPerPage;
-        const paginatedRestaurants = restaurants.slice(startIndex, startIndex + itemsPerPage);
-        
-        // Update the count
-        const countElement = document.getElementById('restaurant-count');
-        if (countElement) {
-            if (totalItems === 0) {
-                countElement.textContent = 'No restaurants found';
-            } else {
-                countElement.textContent = `${totalItems} restaurant${totalItems !== 1 ? 's' : ''} (showing ${Math.min(startIndex + 1, totalItems)}-${Math.min(startIndex + itemsPerPage, totalItems)})`;
-            }
-        }
-        
-        // Clear the container
-        restaurantListContainer.innerHTML = '';
-        
-        // Handle empty state
-        if (paginatedRestaurants.length === 0) {
-            restaurantListContainer.innerHTML = `
-                <div class="empty-state">
-                    <i class="fas fa-utensils empty-icon"></i>
-                    <h3>No restaurants found</h3>
-                    <p>Try adjusting your filters or adding new restaurants</p>
-                </div>
-            `;
-        } 
-        // Handle table view
-        else if (viewMode === 'table') {
-            createTableView(restaurantListContainer, paginatedRestaurants);
-        } 
-        // Handle grid/list view
-        else {
-            const promises = paginatedRestaurants.map(restaurant => createRestaurantElement(restaurant, viewMode));
-            
-            Promise.all(promises)
-                .then(elements => {
-                    elements.forEach(element => {
-                        if (element) restaurantListContainer.appendChild(element);
-                    });
-                    updateBulkActionButtons();
-                })
-                .catch(error => {
-                    console.error('Error creating restaurant elements:', error);
-                    restaurantListContainer.innerHTML = `<div class="error-message">Error loading restaurants: ${error.message}</div>`;
-                });
-        }
-        
-        // Create pagination controls
-        if (paginationContainer) {
-            paginationContainer.innerHTML = generatePaginationControls(currentPage, totalPages);
-        }
+        // Get restaurants data using RestaurantService instead of StorageModule
+        restaurantService.getAll()
+            .then(restaurants => {
+                // Apply filters based on search criteria or standard filters
+                restaurants = applyFilters(restaurants, searchCriteria, statusOption, filterOption);
+                
+                // Apply sort
+                restaurants = applySorting(restaurants, sortOption);
+                
+                // Calculate pagination
+                totalItems = restaurants.length;
+                totalPages = Math.ceil(totalItems / itemsPerPage);
+                if (currentPage > totalPages) currentPage = totalPages || 1;
+                
+                // Get current page of restaurants
+                const startIndex = (currentPage - 1) * itemsPerPage;
+                const paginatedRestaurants = restaurants.slice(startIndex, startIndex + itemsPerPage);
+                
+                // Update the count
+                const countElement = document.getElementById('restaurant-count');
+                if (countElement) {
+                    if (totalItems === 0) {
+                        countElement.textContent = 'No restaurants found';
+                    } else {
+                        countElement.textContent = `${totalItems} restaurant${totalItems !== 1 ? 's' : ''} (showing ${Math.min(startIndex + 1, totalItems)}-${Math.min(startIndex + itemsPerPage, totalItems)})`;
+                    }
+                }
+                
+                // Clear the container
+                restaurantListContainer.innerHTML = '';
+                
+                // Handle empty state
+                if (paginatedRestaurants.length === 0) {
+                    restaurantListContainer.innerHTML = `
+                        <div class="empty-state">
+                            <i class="fas fa-utensils empty-icon"></i>
+                            <h3>No restaurants found</h3>
+                            <p>Try adjusting your filters or adding new restaurants</p>
+                        </div>
+                    `;
+                } 
+                // Handle table view
+                else if (viewMode === 'table') {
+                    createTableView(restaurantListContainer, paginatedRestaurants);
+                } 
+                // Handle grid/list view
+                else {
+                    const promises = paginatedRestaurants.map(restaurant => createRestaurantElement(restaurant, viewMode));
+                    
+                    Promise.all(promises)
+                        .then(elements => {
+                            elements.forEach(element => {
+                                if (element) restaurantListContainer.appendChild(element);
+                            });
+                            updateBulkActionButtons();
+                        })
+                        .catch(error => {
+                            console.error('Error creating restaurant elements:', error);
+                            restaurantListContainer.innerHTML = `<div class="error-message">Error loading restaurants: ${error.message}</div>`;
+                        });
+                }
+                
+                // Create pagination controls
+                if (paginationContainer) {
+                    paginationContainer.innerHTML = generatePaginationControls(currentPage, totalPages);
+                }
+            })
+            .catch(error => {
+                ErrorHandlingService.handleError(error, 'Loading restaurants');
+                restaurantListContainer.innerHTML = `<div class="error-message">Error loading restaurants: ${error.message}</div>`;
+            });
     }
 
     /**
@@ -974,7 +999,7 @@ const RestaurantModule = (function() {
 
     /**
      * View restaurant details
-     * @param {number} restaurantId - The ID of the restaurant
+     * @param {number} restaurantId - The ID of the restaurant to view
      */
     async function viewRestaurantDetails(restaurantId) {
         // Navigate to restaurant detail section
@@ -983,47 +1008,40 @@ const RestaurantModule = (function() {
         });
         
         const detailSection = document.getElementById('restaurant-detail');
-        if (detailSection) {
-            detailSection.classList.add('active');
+        if (!detailSection) return;
+        
+        detailSection.classList.add('active');
+        
+        // Update page title
+        const pageTitle = document.getElementById('page-title');
+        if (pageTitle) pageTitle.textContent = 'Restaurant Details';
+        
+        // Show loading state
+        detailSection.innerHTML = '<div class="loading-state"><i class="fas fa-spinner fa-spin"></i> Loading restaurant details...</div>';
+        
+        try {
+            // Get restaurant with relations using RestaurantService
+            const restaurantData = await restaurantService.getWithRelations(restaurantId);
             
-            // Update page title
-            const pageTitle = document.getElementById('page-title');
-            if (pageTitle) pageTitle.textContent = 'Restaurant Details';
-            
-            // Show loading state
-            detailSection.innerHTML = '<div class="loading-state"><i class="fas fa-spinner fa-spin"></i> Loading restaurant details...</div>';
-            
-            // Get restaurant data
-            const restaurants = JSON.parse(localStorage.getItem('restaurants') || '[]');
-            const restaurant = restaurants.find(r => r.id === restaurantId);
-            
-            if (!restaurant) {
+            if (!restaurantData.restaurant) {
                 detailSection.innerHTML = '<div class="error-state">Restaurant not found</div>';
                 return;
             }
             
-            // Get associated data
-            const curators = JSON.parse(localStorage.getItem('curators') || '[]');
-            const curator = curators.find(c => c.id === restaurant.curatorId);
-            
-            const restaurantConcepts = JSON.parse(localStorage.getItem('restaurantConcepts') || '[]');
-            const concepts = JSON.parse(localStorage.getItem('concepts') || '[]');
-            
-            const conceptsByCategory = groupConceptsByCategory(restaurantId, restaurantConcepts, concepts);
-            
-            // Get restaurant location
-            const locations = JSON.parse(localStorage.getItem('restaurantLocations') || '[]');
-            const location = locations.find(l => l.restaurantId === restaurantId);
+            const restaurant = restaurantData.restaurant;
+            const curator = restaurantData.curator;
+            const conceptsByCategory = restaurantData.conceptsByCategory || {};
+            const location = restaurantData.location;
             
             // Get images
             let galleryHtml = '<p>No images available</p>';
             try {
-                const images = await StorageModule.getRestaurantImages(restaurantId);
+                const images = await imageService.getRestaurantImages(restaurantId);
                 if (images && images.length > 0) {
                     galleryHtml = '<div class="image-gallery">';
                     
                     for (const image of images) {
-                        const imageUrl = await StorageModule.getImageURL(image.id);
+                        const imageUrl = await imageService.getImageURL(image.id);
                         if (imageUrl) {
                             galleryHtml += `
                                 <div class="gallery-item">
@@ -1204,6 +1222,9 @@ const RestaurantModule = (function() {
                     UIModule.showToast(`Restaurant status updated to ${newStatus}`, 'success');
                 });
             });
+        } catch (error) {
+            ErrorHandlingService.handleError(error, `Loading restaurant ${restaurantId}`);
+            detailSection.innerHTML = `<div class="error-state">Error: ${error.message}</div>`;
         }
     }
 
@@ -1215,23 +1236,21 @@ const RestaurantModule = (function() {
      * @return {Object} - Object with category keys and arrays of concepts as values
      */
     function groupConceptsByCategory(restaurantId, restaurantConcepts, allConcepts) {
-        const result = {};
-        
-        // Get concept IDs for this restaurant
+        // Filter to get only concepts for this restaurant
         const conceptIds = restaurantConcepts
             .filter(rc => rc.restaurantId === restaurantId)
             .map(rc => rc.conceptId);
         
-        // Get actual concept objects
-        const concepts = allConcepts.filter(c => conceptIds.includes(c.id));
-        
         // Group by category
-        concepts.forEach(concept => {
-            if (!result[concept.category]) {
-                result[concept.category] = [];
-            }
-            result[concept.category].push(concept);
-        });
+        const result = {};
+        allConcepts
+            .filter(c => conceptIds.includes(c.id))
+            .forEach(concept => {
+                if (!result[concept.category]) {
+                    result[concept.category] = [];
+                }
+                result[concept.category].push(concept);
+            });
         
         return result;
     }
@@ -1241,13 +1260,18 @@ const RestaurantModule = (function() {
      * @param {number} restaurantId - The restaurant ID to update
      * @param {string} newStatus - The new status
      */
-    function updateRestaurantStatus(restaurantId, newStatus) {
-        const restaurants = JSON.parse(localStorage.getItem('restaurants') || '[]');
-        const index = restaurants.findIndex(r => r.id === restaurantId);
-        
-        if (index !== -1) {
-            restaurants[index].status = newStatus;
-            localStorage.setItem('restaurants', JSON.stringify(restaurants));
+    async function updateRestaurantStatus(restaurantId, newStatus) {
+        try {
+            await StorageModule.updateRestaurant(restaurantId, { status: newStatus });
+            UIModule.showToast(`Restaurant status updated to ${newStatus}`, 'success');
+            
+            // Update app statistics
+            if (typeof updateRestaurantStatusCounts === 'function') {
+                updateRestaurantStatusCounts();
+            }
+        } catch (error) {
+            console.error('Error updating restaurant status:', error);
+            UIModule.showToast('Error updating restaurant status', 'error');
         }
     }
 
@@ -1256,8 +1280,20 @@ const RestaurantModule = (function() {
      * @param {number} restaurantId - The ID of the restaurant to edit
      */
     function editRestaurant(restaurantId) {
-        // Implementation details omitted for brevity
-        UIModule.showToast('Edit functionality not yet implemented', 'info');
+        console.log("editRestaurant called with ID:", restaurantId);
+        
+        try {
+            // Show the restaurant editor form directly
+            showRestaurantEditor(restaurantId);
+        } catch (error) {
+            console.error("Error in editRestaurant:", error);
+            
+            if (typeof UIModule !== 'undefined' && typeof UIModule.showToast === 'function') {
+                UIModule.showToast(`Error opening restaurant editor: ${error.message}`, 'error');
+            } else {
+                alert(`Error opening restaurant editor: ${error.message}`);
+            }
+        }
     }
 
     /**
@@ -1265,17 +1301,24 @@ const RestaurantModule = (function() {
      * @param {Array} restaurantIds - Array of restaurant IDs to delete
      */
     async function deleteRestaurants(restaurantIds) {
-        if (!Array.isArray(restaurantIds) || restaurantIds.length === 0) return;
-        
         try {
-            // Use StorageModule to delete restaurants and related data
+            // Use StorageModule to delete the restaurant and all associated data
             await StorageModule.deleteRestaurants(restaurantIds);
             
             // Show success message
-            UIModule.showToast('Restaurants deleted successfully', 'success');
+            UIModule.showToast(`Successfully deleted ${restaurantIds.length} restaurant(s)`, 'success');
+            
+            // Update app statistics
+            if (typeof updateAppStats === 'function') {
+                updateAppStats();
+            }
+            
+            // Reload restaurants and update display
+            updateRestaurantListings();
+            
         } catch (error) {
             console.error('Error deleting restaurants:', error);
-            UIModule.showToast('Error deleting restaurant data', 'error');
+            UIModule.showToast('Error deleting restaurants', 'error');
         }
     }
 
@@ -1288,14 +1331,1083 @@ const RestaurantModule = (function() {
         return Array.from(selectedCheckboxes).map(cb => parseInt(cb.value));
     }
 
+    /**
+     * Format a date as MM/DD/YYYY
+     * @param {Date} date - Date to format
+     * @return {string} - Formatted date string
+     */
+    function formatDate(date) {
+        return `${date.getMonth() + 1}/${date.getDate()}/${date.getFullYear()}`;
+    }
+    
+    /**
+     * Format a date as Month Year (e.g., January 2023)
+     * @param {Date} date - Date to format
+     * @return {string} - Formatted date string
+     */
+    function formatMonthYear(date) {
+        const monthNames = [
+            'January', 'February', 'March', 'April', 'May', 'June',
+            'July', 'August', 'September', 'October', 'November', 'December'
+        ];
+        return `${monthNames[date.getMonth()]} ${date.getFullYear()}`;
+    }
+    
+    /**
+     * Create a new restaurant
+     * @param {Object} restaurantData - Data for the new restaurant
+     * @return {Promise<Object>} - The newly created restaurant
+     */
+    async function createRestaurant(restaurantData) {
+        try {
+            // Generate a timestamp if not provided
+            if (!restaurantData.timestamp) {
+                restaurantData.timestamp = new Date().toISOString();
+            }
+            
+            // Ensure required fields
+            if (!restaurantData.name || !restaurantData.curatorId) {
+                throw new Error('Restaurant name and curator are required');
+            }
+            
+            // Use RestaurantService instead of StorageModule
+            const newRestaurant = await restaurantService.create(restaurantData);
+            
+            // Show success notification
+            UIModule.showToast('Restaurant created successfully', 'success');
+            
+            // Update restaurant listings to show the new restaurant
+            updateRestaurantListings();
+            
+            // Update app statistics
+            if (typeof updateAppStats === 'function') {
+                updateAppStats();
+            }
+            
+            return newRestaurant;
+        } catch (error) {
+            ErrorHandlingService.handleError(error, 'Creating restaurant');
+            UIModule.showToast('Error creating restaurant', 'error');
+            throw error;
+        }
+    }
+    
+    /**
+     * Update an existing restaurant
+     * @param {number} restaurantId - ID of the restaurant to update
+     * @param {Object} restaurantData - New restaurant data
+     * @return {Promise<Object>} - The updated restaurant
+     */
+    async function updateRestaurant(restaurantId, restaurantData) {
+        try {
+            // Update the restaurant in storage using StorageModule
+            const updatedRestaurant = await StorageModule.updateRestaurant(restaurantId, restaurantData);
+            
+            // Show success notification
+            UIModule.showToast('Restaurant updated successfully', 'success');
+            
+            // Update restaurant listings to show the updated restaurant
+            updateRestaurantListings();
+            
+            // Update app statistics if status was changed
+            if (restaurantData.status) {
+                if (typeof updateRestaurantStatusCounts === 'function') {
+                    updateRestaurantStatusCounts();
+                }
+            }
+            
+            return updatedRestaurant;
+        } catch (error) {
+            console.error('Error updating restaurant:', error);
+            UIModule.showToast('Error updating restaurant', 'error');
+            throw error;
+        }
+    }
+    
+    /**
+     * Show restaurant editor form
+     * @param {number} restaurantId - ID of the restaurant to edit, or null for new restaurant
+     */
+    function showRestaurantEditor(restaurantId = null) {
+        // Create modal container if it doesn't exist
+        let modalContainer = document.getElementById('restaurant-editor-modal');
+        if (!modalContainer) {
+            modalContainer = document.createElement('div');
+            modalContainer.id = 'restaurant-editor-modal';
+            modalContainer.className = 'modal-container';
+            document.body.appendChild(modalContainer);
+        }
+        
+        // Default restaurant data for new restaurant
+        let restaurantData = {
+            name: '',
+            description: '',
+            transcription: '',
+            curatorId: '', // Will be populated with the first curator in the list
+            status: STATUS.DRAFT
+        };
+        
+        // Set modal title based on whether we're editing or creating
+        const modalTitle = restaurantId ? 'Edit Restaurant' : 'Create New Restaurant';
+        
+        // If editing an existing restaurant, get its data
+        if (restaurantId) {
+            const restaurants = JSON.parse(localStorage.getItem('restaurants') || '[]');
+            const restaurant = restaurants.find(r => r.id === restaurantId);
+            
+            if (restaurant) {
+                restaurantData = { ...restaurant };
+            } else {
+                UIModule.showToast('Restaurant not found', 'error');
+                return;
+            }
+        }
+        
+        // Get curators for curator dropdown
+        const curators = JSON.parse(localStorage.getItem('curators') || '[]');
+        if (curators.length > 0 && !restaurantData.curatorId) {
+            restaurantData.curatorId = curators[0].id;
+        }
+        
+        // Get concepts for concept selection
+        const concepts = JSON.parse(localStorage.getItem('concepts') || '[]');
+        const restaurantConcepts = JSON.parse(localStorage.getItem('restaurantConcepts') || '[]');
+        
+        // Group concepts by category
+        const conceptsByCategory = {};
+        concepts.forEach(concept => {
+            if (!conceptsByCategory[concept.category]) {
+                conceptsByCategory[concept.category] = [];
+            }
+            conceptsByCategory[concept.category].push(concept);
+        });
+        
+        // Get selected concept IDs for this restaurant
+        const selectedConceptIds = restaurantId ? 
+            restaurantConcepts
+                .filter(rc => rc.restaurantId === restaurantId)
+                .map(rc => rc.conceptId) : 
+            [];
+        
+        // Create curator options HTML
+        const curatorOptions = curators.map(curator => 
+            `<option value="${curator.id}" ${restaurantData.curatorId === curator.id ? 'selected' : ''}>${curator.name}</option>`
+        ).join('');
+        
+        // Create concepts selection HTML
+        let conceptsHTML = '';
+        Object.entries(conceptsByCategory).forEach(([category, categoryConcepts]) => {
+            conceptsHTML += `
+                <div class="concept-category">
+                    <h4>${category}</h4>
+                    <div class="concept-list">
+                        ${categoryConcepts.map(concept => `
+                            <label class="concept-checkbox">
+                                <input type="checkbox" name="concepts" value="${concept.id}" 
+                                    ${selectedConceptIds.includes(concept.id) ? 'checked' : ''}>
+                                <span>${concept.value}</span>
+                            </label>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+        });
+        
+        // Build modal content
+        modalContainer.innerHTML = `
+            <div class="modal">
+                <div class="modal-header">
+                    <h3>${modalTitle}</h3>
+                    <button class="close-modal"><i class="fas fa-times"></i></button>
+                </div>
+                <div class="modal-body">
+                    <form id="restaurant-editor-form">
+                        <div class="modal-tabs">
+                            <button type="button" class="modal-tab active" data-tab="basic-info">Basic Info</button>
+                            <button type="button" class="modal-tab" data-tab="concepts">Concepts</button>
+                            <button type="button" class="modal-tab" data-tab="images">Images</button>
+                            <button type="button" class="modal-tab" data-tab="location">Location</button>
+                        </div>
+                        
+                        <div class="modal-tab-content active" data-tab="basic-info">
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="restaurant-name">Restaurant Name*</label>
+                                    <input type="text" id="restaurant-name" value="${restaurantData.name}" required placeholder="Enter restaurant name">
+                                </div>
+                                <div class="form-group">
+                                    <label for="restaurant-curator">Curator*</label>
+                                    <select id="restaurant-curator" required>
+                                        ${curatorOptions}
+                                    </select>
+                                </div>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="restaurant-status">Status</label>
+                                <div class="status-selector">
+                                    <label>
+                                        <input type="radio" name="status" value="${STATUS.DRAFT}" ${restaurantData.status === STATUS.DRAFT ? 'checked' : ''}>
+                                        <span class="status-badge draft">${STATUS.DRAFT}</span>
+                                    </label>
+                                    <label>
+                                        <input type="radio" name="status" value="${STATUS.REVISED}" ${restaurantData.status === STATUS.REVISED ? 'checked' : ''}>
+                                        <span class="status-badge revised">${STATUS.REVISED}</span>
+                                    </label>
+                                    <label>
+                                        <input type="radio" name="status" value="${STATUS.PRODUCTION}" ${restaurantData.status === STATUS.PRODUCTION ? 'checked' : ''}>
+                                        <span class="status-badge production">${STATUS.PRODUCTION}</span>
+                                    </label>
+                                    <label>
+                                        <input type="radio" name="status" value="${STATUS.ARCHIVED}" ${restaurantData.status === STATUS.ARCHIVED ? 'checked' : ''}>
+                                        <span class="status-badge archived">${STATUS.ARCHIVED}</span>
+                                    </label>
+                                </div>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="restaurant-description">Description</label>
+                                <textarea id="restaurant-description" rows="3" placeholder="Short description of the restaurant">${restaurantData.description || ''}</textarea>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="restaurant-transcription">Transcription</label>
+                                <textarea id="restaurant-transcription" rows="6" placeholder="Transcription of audio content">${restaurantData.transcription || ''}</textarea>
+                            </div>
+                        </div>
+                        
+                        <div class="modal-tab-content" data-tab="concepts">
+                            <div class="search-box">
+                                <input type="text" id="concept-search-input" placeholder="Search concepts...">
+                            </div>
+                            
+                            <div class="concepts-container">
+                                ${conceptsHTML}
+                            </div>
+                            
+                            <div class="add-concept-section">
+                                <h4>Add New Concept</h4>
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label for="new-concept-category">Category</label>
+                                        <input type="text" id="new-concept-category" placeholder="e.g. Cuisine">
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="new-concept-value">Value</label>
+                                        <input type="text" id="new-concept-value" placeholder="e.g. Italian">
+                                    </div>
+                                    <button type="button" id="add-new-concept-btn" class="btn btn-primary">Add</button>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="modal-tab-content" data-tab="images">
+                            <div class="image-upload-container">
+                                <div class="image-dropzone" id="image-dropzone">
+                                    <i class="fas fa-cloud-upload-alt"></i>
+                                    <p>Drag images here or click to upload</p>
+                                    <input type="file" id="image-upload" multiple accept="image/*" style="display: none;">
+                                </div>
+                                
+                                <div id="restaurant-images-preview" class="restaurant-images-preview">
+                                    <p>No images uploaded yet</p>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="modal-tab-content" data-tab="location">
+                            <div class="form-group">
+                                <label for="restaurant-address">Address</label>
+                                <input type="text" id="restaurant-address" placeholder="Enter restaurant address">
+                            </div>
+                            
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="restaurant-latitude">Latitude</label>
+                                    <input type="number" id="restaurant-latitude" step="0.000001" placeholder="Latitude coordinate">
+                                </div>
+                                <div class="form-group">
+                                    <label for="restaurant-longitude">Longitude</label>
+                                    <input type="number" id="restaurant-longitude" step="0.000001" placeholder="Longitude coordinate">
+                                </div>
+                            </div>
+                            
+                            <div id="restaurant-map" class="restaurant-map">
+                                <p>Map loading...</p>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary close-modal">Cancel</button>
+                    <button type="button" id="save-restaurant-btn" class="btn btn-primary">Save Restaurant</button>
+                </div>
+            </div>
+        `;
+        
+        // Show the modal
+        modalContainer.classList.add('active');
+        
+        // Add event listener for closing the modal
+        modalContainer.querySelectorAll('.close-modal').forEach(button => {
+            button.addEventListener('click', function() {
+                modalContainer.classList.remove('active');
+                setTimeout(() => {
+                    modalContainer.remove();
+                }, 300);
+            });
+        });
+        
+        // Add tab switching functionality
+        modalContainer.querySelectorAll('.modal-tab').forEach(tab => {
+            tab.addEventListener('click', function() {
+                // Remove active class from all tabs and tab contents
+                modalContainer.querySelectorAll('.modal-tab').forEach(t => t.classList.remove('active'));
+                modalContainer.querySelectorAll('.modal-tab-content').forEach(c => c.classList.remove('active'));
+                
+                // Add active class to clicked tab and corresponding tab content
+                this.classList.add('active');
+                const tabId = this.getAttribute('data-tab');
+                modalContainer.querySelector(`.modal-tab-content[data-tab="${tabId}"]`).classList.add('active');
+            });
+        });
+        
+        // Add search functionality for concepts
+        const conceptSearchInput = document.getElementById('concept-search-input');
+        if (conceptSearchInput) {
+            conceptSearchInput.addEventListener('input', function() {
+                const searchTerm = this.value.toLowerCase();
+                const conceptCheckboxes = document.querySelectorAll('.concept-checkbox');
+                
+                conceptCheckboxes.forEach(checkbox => {
+                    const conceptName = checkbox.querySelector('span').textContent.toLowerCase();
+                    if (conceptName.includes(searchTerm) || searchTerm === '') {
+                        checkbox.style.display = 'flex';
+                    } else {
+                        checkbox.style.display = 'none';
+                    }
+                });
+            });
+        }
+        
+        // Add new concept functionality
+        const addConceptBtn = document.getElementById('add-new-concept-btn');
+        if (addConceptBtn) {
+            addConceptBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                const category = document.getElementById('new-concept-category').value.trim();
+                const value = document.getElementById('new-concept-value').value.trim();
+                
+                if (category && value) {
+                    // Add new concept to storage
+                    const newConcept = {
+                        category,
+                        value,
+                        timestamp: new Date().toISOString(),
+                        id: Date.now() // Simple ID generation for now
+                    };
+                    
+                    const concepts = JSON.parse(localStorage.getItem('concepts') || '[]');
+                    concepts.push(newConcept);
+                    localStorage.setItem('concepts', JSON.stringify(concepts));
+                    
+                    // Clear inputs
+                    document.getElementById('new-concept-category').value = '';
+                    document.getElementById('new-concept-value').value = '';
+                    
+                    // Update UI to show new concept
+                    const categoryExists = document.querySelector(`.concept-category h4:contains("${category}")`);
+                    if (categoryExists) {
+                        // Add to existing category
+                        const conceptList = categoryExists.nextElementSibling;
+                        conceptList.innerHTML += `
+                            <label class="concept-checkbox">
+                                <input type="checkbox" name="concepts" value="${newConcept.id}" checked>
+                                <span>${value}</span>
+                            </label>
+                        `;
+                    } else {
+                        // Create new category
+                        const conceptsContainer = document.querySelector('.concepts-container');
+                        conceptsContainer.innerHTML += `
+                            <div class="concept-category">
+                                <h4>${category}</h4>
+                                <div class="concept-list">
+                                    <label class="concept-checkbox">
+                                        <input type="checkbox" name="concepts" value="${newConcept.id}" checked>
+                                        <span>${value}</span>
+                                    </label>
+                                </div>
+                            </div>
+                        `;
+                    }
+                    
+                    UIModule.showToast(`Added new concept: ${value}`, 'success');
+                } else {
+                    UIModule.showToast('Please enter both category and value for the new concept', 'warning');
+                }
+            });
+        }
+        
+        // Set up image dropzone
+        const imageDropzone = document.getElementById('image-dropzone');
+        const imageUpload = document.getElementById('image-upload');
+        if (imageDropzone && imageUpload) {
+            imageDropzone.addEventListener('click', function() {
+                imageUpload.click();
+            });
+            
+            imageDropzone.addEventListener('dragover', function(e) {
+                e.preventDefault();
+                imageDropzone.classList.add('dragover');
+            });
+            
+            imageDropzone.addEventListener('dragleave', function(e) {
+                e.preventDefault();
+                imageDropzone.classList.remove('dragover');
+            });
+            
+            imageDropzone.addEventListener('drop', function(e) {
+                e.preventDefault();
+                imageDropzone.classList.remove('dragover');
+                if (e.dataTransfer.files.length > 0) {
+                    handleImageUpload(e.dataTransfer.files);
+                }
+            });
+            
+            imageUpload.addEventListener('change', function() {
+                if (this.files.length > 0) {
+                    handleImageUpload(this.files);
+                }
+            });
+            
+            // Load existing restaurant images if editing
+            if (restaurantId) {
+                loadRestaurantImages(restaurantId);
+            }
+        }
+        
+        // Handle image upload
+        function handleImageUpload(files) {
+            const imagesPreview = document.getElementById('restaurant-images-preview');
+            if (!imagesPreview) return;
+            
+            // Clear "no images" message if it exists
+            if (imagesPreview.querySelector('p')) {
+                imagesPreview.innerHTML = '';
+            }
+            
+            // Process each file
+            Array.from(files).forEach(file => {
+                if (!file.type.startsWith('image/')) return;
+                
+                // Create image preview element
+                const imagePreview = document.createElement('div');
+                imagePreview.className = 'image-preview-item';
+                imagePreview.dataset.file = file.name;
+                
+                // Store file in the element for later upload
+                imagePreview.file = file;
+                
+                // Create preview thumbnail
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    imagePreview.innerHTML = `
+                        <img src="${e.target.result}" alt="${file.name}">
+                        <div class="image-preview-actions">
+                            <button type="button" class="remove-image" title="Remove image">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                    `;
+                };
+                reader.readAsDataURL(file);
+                
+                // Add to preview container
+                imagesPreview.appendChild(imagePreview);
+                
+                // Add remove button event handler
+                imagePreview.querySelector('.remove-image').addEventListener('click', function() {
+                    imagePreview.remove();
+                    
+                    // If no images left, show message
+                    if (imagesPreview.children.length === 0) {
+                        imagesPreview.innerHTML = '<p>No images uploaded yet</p>';
+                    }
+                });
+            });
+        }
+        
+        // Load existing restaurant images
+        async function loadRestaurantImages(restaurantId) {
+            try {
+                const imagesPreview = document.getElementById('restaurant-images-preview');
+                if (!imagesPreview) return;
+                
+                const photos = await StorageModule.getRestaurantImages(restaurantId);
+                
+                if (photos && photos.length > 0) {
+                    // Clear "no images" message if it exists
+                    imagesPreview.innerHTML = '';
+                    
+                    // Add each photo to the preview
+                    for (const photo of photos) {
+                        try {
+                            const imageUrl = await StorageModule.getImageURL(photo.id);
+                            
+                            if (imageUrl) {
+                                const imagePreview = document.createElement('div');
+                                imagePreview.className = 'image-preview-item existing';
+                                imagePreview.dataset.id = photo.id;
+                                
+                                imagePreview.innerHTML = `
+                                    <img src="${imageUrl}" alt="Restaurant photo">
+                                    <div class="image-preview-actions">
+                                        <button type="button" class="remove-image" title="Remove image">
+                                            <i class="fas fa-times"></i>
+                                        </button>
+                                    </div>
+                                `;
+                                
+                                imagesPreview.appendChild(imagePreview);
+                                
+                                // Add remove button event handler
+                                imagePreview.querySelector('.remove-image').addEventListener('click', function() {
+                                    imagePreview.remove();
+                                    
+                                    // Mark the image for deletion
+                                    imagePreview.classList.add('deleted');
+                                    
+                                    // If no images left, show message
+                                    if (imagesPreview.querySelectorAll('.image-preview-item:not(.deleted)').length === 0) {
+                                        imagesPreview.innerHTML = '<p>No images uploaded yet</p>';
+                                    }
+                                });
+                            }
+                        } catch (error) {
+                            console.warn(`Could not load image ${photo.id}:`, error);
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error('Error loading restaurant images:', error);
+                UIModule.showToast('Error loading restaurant images', 'error');
+            }
+        }
+        
+        // Save button functionality
+        const saveButton = document.getElementById('save-restaurant-btn');
+        if (saveButton) {
+            saveButton.addEventListener('click', async function() {
+                // Validate form
+                const restaurantName = document.getElementById('restaurant-name').value.trim();
+                const curatorId = parseInt(document.getElementById('restaurant-curator').value);
+                
+                if (!restaurantName) {
+                    UIModule.showToast('Please enter a restaurant name', 'warning');
+                    return;
+                }
+                
+                if (!curatorId) {
+                    UIModule.showToast('Please select a curator', 'warning');
+                    return;
+                }
+                
+                // Get selected status
+                const statusInput = document.querySelector('input[name="status"]:checked');
+                const status = statusInput ? statusInput.value : STATUS.DRAFT;
+                
+                // Get description and transcription
+                const description = document.getElementById('restaurant-description').value.trim();
+                const transcription = document.getElementById('restaurant-transcription').value.trim();
+                
+                // Build restaurant object
+                const restaurantData = {
+                    name: restaurantName,
+                    curatorId,
+                    status,
+                    description: description || null,
+                    transcription: transcription || null
+                };
+                
+                try {
+                    // Create or update restaurant
+                    let savedRestaurant;
+                    if (restaurantId) {
+                        // Update existing restaurant
+                        savedRestaurant = await updateRestaurant(restaurantId, restaurantData);
+                    } else {
+                        // Create new restaurant
+                        savedRestaurant = await createRestaurant(restaurantData);
+                        restaurantId = savedRestaurant.id;
+                    }
+                    
+                    // Save selected concepts
+                    const selectedConcepts = Array.from(document.querySelectorAll('input[name="concepts"]:checked'))
+                        .map(checkbox => parseInt(checkbox.value));
+                    await saveRestaurantConcepts(restaurantId, selectedConcepts);
+                    
+                    // Save images
+                    await saveRestaurantImages(restaurantId);
+                    
+                    // Save location
+                    await saveRestaurantLocation(restaurantId);
+                    
+                    // Close modal
+                    modalContainer.classList.remove('active');
+                    setTimeout(() => {
+                        modalContainer.remove();
+                    }, 300);
+                    
+                    // Update UI
+                    updateRestaurantListings();
+                    
+                } catch (error) {
+                    console.error('Error saving restaurant:', error);
+                    UIModule.showToast('Error saving restaurant', 'error');
+                }
+            });
+        }
+        
+        // Save restaurant concepts
+        async function saveRestaurantConcepts(restaurantId, conceptIds) {
+            try {
+                await StorageModule.updateRestaurantConcepts(restaurantId, conceptIds);
+                return true;
+            } catch (error) {
+                console.error('Error saving restaurant concepts:', error);
+                throw error;
+            }
+        }
+        
+        // Save restaurant images
+        async function saveRestaurantImages(restaurantId) {
+            try {
+                const imagesPreview = document.getElementById('restaurant-images-preview');
+                if (!imagesPreview) return;
+                
+                // Process deleted images (existing images that were removed)
+                const deletedImages = imagesPreview.querySelectorAll('.image-preview-item.existing.deleted');
+                for (const deletedImage of deletedImages) {
+                    const imageId = parseInt(deletedImage.dataset.id);
+                    if (imageId) {
+                        try {
+                            await StorageModule.deleteImage(imageId.toString());
+                            
+                            // Also remove from restaurantPhotos in localStorage
+                            const restaurantPhotos = JSON.parse(localStorage.getItem('restaurantPhotos') || '[]');
+                            const updatedPhotos = restaurantPhotos.filter(photo => photo.id !== imageId);
+                            localStorage.setItem('restaurantPhotos', JSON.stringify(updatedPhotos));
+                        } catch (error) {
+                            console.error(`Error deleting image ${imageId}:`, error);
+                        }
+                    }
+                }
+                
+                // Process new images
+                const newImages = imagesPreview.querySelectorAll('.image-preview-item:not(.existing):not(.deleted)');
+                for (const newImage of newImages) {
+                    if (newImage.file) {
+                        try {
+                            // Save image to storage
+                            const imageData = await fileToBuffer(newImage.file);
+                            const imageId = await StorageModule.saveImage(imageData);
+                            
+                            // Associate image with restaurant
+                            const restaurantPhotos = JSON.parse(localStorage.getItem('restaurantPhotos') || '[]');
+                            restaurantPhotos.push({
+                                restaurantId,
+                                id: imageId,
+                                photoDataRef: `images/photo_${imageId}.jpg`
+                            });
+                            localStorage.setItem('restaurantPhotos', JSON.stringify(restaurantPhotos));
+                        } catch (error) {
+                            console.error('Error saving image:', error);
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error('Error processing restaurant images:', error);
+                throw error;
+            }
+        }
+        
+        // Save restaurant location
+        async function saveRestaurantLocation(restaurantId) {
+            const latitude = parseFloat(document.getElementById('restaurant-latitude')?.value || 0);
+            const longitude = parseFloat(document.getElementById('restaurant-longitude')?.value || 0);
+            const address = document.getElementById('restaurant-address')?.value?.trim();
+            
+            // Check if we have valid location data
+            if (latitude && longitude) {
+                // Get existing locations
+                const restaurantLocations = JSON.parse(localStorage.getItem('restaurantLocations') || '[]');
+                
+                // Check if this restaurant already has a location
+                const existingIndex = restaurantLocations.findIndex(loc => loc.restaurantId === restaurantId);
+                const locationData = {
+                    restaurantId,
+                    latitude,
+                    longitude,
+                    address: address || null
+                };
+                
+                if (existingIndex !== -1) {
+                    // Update existing location
+                    locationData.id = restaurantLocations[existingIndex].id;
+                    restaurantLocations[existingIndex] = locationData;
+                } else {
+                    // Add new location
+                    locationData.id = Date.now(); // Simple ID generation
+                    restaurantLocations.push(locationData);
+                }
+                
+                // Save updated locations
+                localStorage.setItem('restaurantLocations', JSON.stringify(restaurantLocations));
+            }
+        }
+        
+        // Utility function to convert a file to a buffer
+        function fileToBuffer(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = function(event) {
+                    resolve(event.target.result);
+                };
+                reader.onerror = function(error) {
+                    reject(error);
+                };
+                reader.readAsArrayBuffer(file);
+            });
+        }
+    }
+    
+    /**
+     * Initialize bulk actions for restaurant management
+     */
+    function initBulkActions() {
+        const bulkDeleteBtn = document.getElementById('bulk-delete');
+        const bulkExportBtn = document.getElementById('bulk-export');
+        const clearSelectionBtn = document.querySelector('.clear-selection');
+        
+        if (bulkDeleteBtn) {
+            bulkDeleteBtn.addEventListener('click', function() {
+                if (selectedRestaurants.length === 0 || this.classList.contains('disabled')) return;
+                
+                UIModule.showConfirmDialog({
+                    title: 'Delete Restaurants',
+                    message: `Are you sure you want to delete ${selectedRestaurants.length} selected restaurants? This action cannot be undone.`,
+                    confirmText: 'Delete',
+                    confirmClass: 'btn-danger',
+                    onConfirm: () => deleteSelectedRestaurants(),
+                    onCancel: () => {}
+                });
+            });
+        }
+        
+        if (bulkExportBtn) {
+            bulkExportBtn.addEventListener('click', function() {
+                if (selectedRestaurants.length === 0 || this.classList.contains('disabled')) return;
+                
+                if (typeof ImportExportModule !== 'undefined' && ImportExportModule.exportRestaurants) {
+                    ImportExportModule.exportRestaurants(selectedRestaurants);
+                } else {
+                    UIModule.showToast('Export functionality is not available', 'error');
+                }
+            });
+        }
+        
+        if (clearSelectionBtn) {
+            clearSelectionBtn.addEventListener('click', clearSelection);
+        }
+    }
+    
+    /**
+     * Clear selected restaurants
+     */
+    function clearSelection() {
+        selectedRestaurants = [];
+        
+        // Uncheck all checkboxes
+        document.querySelectorAll('.select-restaurant').forEach(checkbox => {
+            checkbox.checked = false;
+        });
+        
+        // Update select all checkbox
+        const selectAllCheckbox = document.getElementById('select-all-restaurants');
+        if (selectAllCheckbox) {
+            selectAllCheckbox.checked = false;
+            selectAllCheckbox.indeterminate = false;
+        }
+        
+        // Hide selection info
+        const selectionInfo = document.querySelector('.selection-info');
+        if (selectionInfo) {
+            selectionInfo.style.display = 'none';
+        }
+        
+        // Disable bulk action buttons
+        const bulkBtns = document.querySelectorAll('.bulk-action-btn');
+        bulkBtns.forEach(btn => {
+            btn.classList.add('disabled');
+            btn.disabled = true;
+        });
+    }
+    
+    /**
+     * Initialize selection handling for bulk actions
+     */
+    function initSelectionHandling() {
+        // Update selection display when checkboxes change
+        document.addEventListener('change', function(e) {
+            if (e.target.classList.contains('select-restaurant')) {
+                updateSelectionDisplay();
+            }
+        });
+        
+        // Initialize selection display
+        updateSelectionDisplay();
+    }
+    
+    /**
+     * Update selection display and buttons
+     */
+    function updateSelectionDisplay() {
+        const selectedCount = document.getElementById('selected-count');
+        const selectionInfo = document.querySelector('.selection-info');
+        const bulkBtns = document.querySelectorAll('.bulk-action-btn');
+        
+        if (selectedCount) {
+            selectedCount.textContent = selectedRestaurants.length;
+        }
+        
+        if (selectionInfo) {
+            // Show selection info if any restaurants are selected
+            if (selectedRestaurants.length > 0) {
+                selectionInfo.style.display = 'flex';
+                
+                // Enable bulk action buttons
+                bulkBtns.forEach(btn => {
+                    btn.classList.remove('disabled');
+                    btn.disabled = false;
+                });
+            } else {
+                selectionInfo.style.display = 'none';
+                
+                // Disable bulk action buttons
+                bulkBtns.forEach(btn => {
+                    btn.classList.add('disabled');
+                    btn.disabled = true;
+                });
+            }
+        }
+    }
+    
+    /**
+     * Delete selected restaurants
+     */
+    async function deleteSelectedRestaurants() {
+        if (selectedRestaurants.length === 0) return;
+        
+        try {
+            // Get original list
+            const restaurants = JSON.parse(localStorage.getItem('restaurants') || '[]');
+            
+            // Filter out selected restaurants
+            const updatedRestaurants = restaurants.filter(r => !selectedRestaurants.includes(r.id.toString()));
+            
+            // Delete associated data (concepts, locations, images)
+            // Note: In a real app with server storage, you'd make API calls here
+            
+            // Delete restaurant-concept associations
+            const restaurantConcepts = JSON.parse(localStorage.getItem('restaurantConcepts') || '[]');
+            const updatedConcepts = restaurantConcepts.filter(rc => !selectedRestaurants.includes(rc.restaurantId.toString()));
+            localStorage.setItem('restaurantConcepts', JSON.stringify(updatedConcepts));
+            
+            // Delete locations
+            const locations = JSON.parse(localStorage.getItem('restaurantLocations') || '[]');
+            const updatedLocations = locations.filter(loc => !selectedRestaurants.includes(loc.restaurantId.toString()));
+            localStorage.setItem('restaurantLocations', JSON.stringify(updatedLocations));
+            
+            // Delete photos
+            const photos = JSON.parse(localStorage.getItem('restaurantPhotos') || '[]');
+            const updatedPhotos = photos.filter(p => !selectedRestaurants.includes(p.restaurantId.toString()));
+            localStorage.setItem('restaurantPhotos', JSON.stringify(updatedPhotos));
+            
+            // Update restaurants list
+            localStorage.setItem('restaurants', JSON.stringify(updatedRestaurants));
+            
+            // Show success message
+            UIModule.showToast(`Successfully deleted ${selectedRestaurants.length} restaurants`, 'success');
+            
+            // Clear selection
+            clearSelection();
+            
+            // Reload restaurants and update display
+            await loadRestaurants();
+            updateRestaurantListings();
+            
+            // Update app statistics
+            if (typeof updateAppStats === 'function') {
+                updateAppStats();
+            }
+            
+        } catch (error) {
+            console.error('Error deleting restaurants:', error);
+            UIModule.showToast('Error deleting restaurants', 'error');
+        }
+    }
+    
+    /**
+     * View restaurant details
+     * @param {number} restaurantId - ID of the restaurant to view
+     */
+    function viewRestaurantDetails(restaurantId) {
+        // Navigate to restaurant detail section
+        if (typeof NavigationModule !== 'undefined' && NavigationModule.navigateTo) {
+            NavigationModule.navigateTo('restaurant-detail');
+        }
+        
+        // Load restaurant details
+        loadRestaurantDetail(restaurantId);
+    }
+    
+    /**
+     * Load restaurant detail page
+     * @param {number} restaurantId - ID of the restaurant to load
+     */
+    function loadRestaurantDetail(restaurantId) {
+        // This would be implemented to load and display restaurant details
+        UIModule.showToast('Restaurant detail view will be implemented in a future update', 'info');
+    }
+    
+    /**
+     * Load restaurants from storage
+     */
+    async function loadRestaurants() {
+        try {
+            // Get from localStorage
+            restaurants = JSON.parse(localStorage.getItem('restaurants') || '[]');
+            
+            // Update total pages
+            calculatePagination();
+            
+        } catch (error) {
+            console.error('Error loading restaurants:', error);
+            restaurants = [];
+            throw error;
+        }
+    }
+    
+    /**
+     * Calculate pagination based on current filters
+     */
+    function calculatePagination() {
+        const totalItems = restaurants.length;
+        totalPages = Math.max(1, Math.ceil(totalItems / itemsPerPage));
+        
+        // Adjust current page if needed
+        if (currentPage > totalPages) {
+            currentPage = totalPages;
+        }
+    }
+    
+    /**
+     * Get array of selected restaurant IDs
+     * @returns {Array} Array of selected restaurant IDs
+     */
+    function getSelectedRestaurants() {
+        return selectedRestaurants;
+    }
+    
+    /**
+     * Save restaurant concepts
+     * @param {number} restaurantId - Restaurant ID
+     * @param {Array} conceptIds - Array of concept IDs
+     * @return {Promise} - Promise that resolves when concepts are saved
+     */
+    async function saveRestaurantConcepts(restaurantId, conceptIds) {
+        try {
+            await StorageModule.updateRestaurantConcepts(restaurantId, conceptIds);
+            return true;
+        } catch (error) {
+            console.error('Error saving restaurant concepts:', error);
+            throw error;
+        }
+    }
+    
+    /**
+     * Save restaurant location
+     * @param {number} restaurantId - Restaurant ID
+     * @param {Object} locationData - Location data
+     * @return {Promise} - Promise that resolves when location is saved
+     */
+    async function saveRestaurantLocation(restaurantId, locationData) {
+        try {
+            if (!locationData.latitude || !locationData.longitude) {
+                return null; // Skip if no coordinates provided
+            }
+            
+            const location = {
+                restaurantId,
+                ...locationData
+            };
+            
+            await StorageModule.saveRestaurantLocation(location);
+            return true;
+        } catch (error) {
+            console.error('Error saving restaurant location:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Load restaurant data for editing
+     * @param {number} restaurantId - ID of the restaurant to load
+     * @return {Promise<Object>} - Promise that resolves with restaurant data
+     */
+    async function loadRestaurantForEditing(restaurantId) {
+        try {
+            // Get restaurant data
+            const restaurant = await StorageModule.getRestaurant(restaurantId);
+            
+            if (!restaurant) {
+                throw new Error('Restaurant not found');
+            }
+            
+            // Get associated concepts
+            const conceptIds = await StorageModule.getRestaurantConcepts(restaurantId);
+            
+            // Get location
+            const location = await StorageModule.getRestaurantLocation(restaurantId);
+            
+            return {
+                restaurant,
+                conceptIds,
+                location
+            };
+        } catch (error) {
+            console.error(`Error loading restaurant ${restaurantId} for editing:`, error);
+            throw new Error(`Failed to load restaurant data: ${error.message}`);
+        }
+    }
+
     // Public API
     return {
         init: init,
         updateRestaurantListings: updateRestaurantListings,
         viewRestaurantDetails: viewRestaurantDetails,
         editRestaurant: editRestaurant,
-        deleteRestaurants: deleteRestaurants,
+        deleteSelectedRestaurants: deleteSelectedRestaurants,
         getSelectedRestaurants: getSelectedRestaurants,
-        goToPage: goToPage
+        goToPage: goToPage,
+        STATUS: STATUS,
+        updateRestaurant,
+        createRestaurant,
+        deleteRestaurants,
+        updateRestaurantStatus,
+        saveRestaurantConcepts,
+        saveRestaurantLocation,
+        loadRestaurantForEditing
     };
 })();

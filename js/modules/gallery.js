@@ -1,6 +1,7 @@
 /**
  * Gallery Module - Handles media gallery features
- * Dependencies: StorageModule for image retrieval, UIModule for notifications
+ * Dependencies: ServiceRegistry, UIUtils, ErrorHandlingService, ValidationService
+ * Provides UI for image gallery management
  */
 
 const GalleryModule = (function() {
@@ -61,7 +62,7 @@ const GalleryModule = (function() {
         
         if (uploadButton) {
             uploadButton.addEventListener('click', function() {
-                UIModule.showToast('Image upload functionality coming soon!', 'info');
+                UIUtils.showNotification('Image upload functionality coming soon!', 'info');
             });
         }
         
@@ -73,25 +74,33 @@ const GalleryModule = (function() {
      * Populate the restaurant filter dropdown
      * @param {HTMLElement} filterSelect - The select element to populate
      */
-    function populateRestaurantFilter(filterSelect) {
+    async function populateRestaurantFilter(filterSelect) {
         if (!filterSelect) return;
         
-        const restaurants = JSON.parse(localStorage.getItem('restaurants') || '[]');
-        
-        // Start with the "All Restaurants" option
-        filterSelect.innerHTML = '<option value="all">All Restaurants</option>';
-        
-        // Add each restaurant as an option
-        restaurants.forEach(restaurant => {
-            const option = document.createElement('option');
-            option.value = restaurant.id;
-            option.textContent = restaurant.name;
-            filterSelect.appendChild(option);
-        });
+        try {
+            // Get restaurant service
+            const restaurantService = ServiceRegistry.getRestaurantService();
+            
+            // Get restaurants
+            const restaurants = await restaurantService.getAll();
+            
+            // Start with the "All Restaurants" option
+            filterSelect.innerHTML = '<option value="all">All Restaurants</option>';
+            
+            // Add each restaurant as an option
+            restaurants.forEach(restaurant => {
+                const option = document.createElement('option');
+                option.value = restaurant.id;
+                option.textContent = ValidationService.sanitizeString(restaurant.name);
+                filterSelect.appendChild(option);
+            });
+        } catch (error) {
+            ErrorHandlingService.handleError(error, 'Populating restaurant filter');
+        }
     }
     
     /**
-     * Load gallery images from storage
+     * Load gallery images
      * @param {string|number} restaurantId - Restaurant ID to filter by, or 'all' for all restaurants
      */
     async function loadGalleryImages(restaurantId) {
@@ -102,12 +111,29 @@ const GalleryModule = (function() {
         galleryGrid.innerHTML = '<div class="loading-indicator"><i class="fas fa-spinner fa-spin"></i> Loading images...</div>';
         
         try {
-            let photos = JSON.parse(localStorage.getItem('restaurantPhotos') || '[]');
-            const restaurants = JSON.parse(localStorage.getItem('restaurants') || '[]');
+            // Get restaurant service and image service
+            const restaurantService = ServiceRegistry.getRestaurantService();
+            const imageService = ServiceRegistry.getImageService();
             
-            // Filter by restaurant if specified
-            if (restaurantId && restaurantId !== 'all') {
-                photos = photos.filter(photo => photo.restaurantId == restaurantId);
+            // Get restaurant names for display
+            const restaurants = await restaurantService.getAll();
+            const restaurantMap = {};
+            restaurants.forEach(restaurant => {
+                restaurantMap[restaurant.id] = restaurant.name;
+            });
+            
+            // Get photos
+            let photos = [];
+            
+            if (restaurantId === 'all') {
+                // Get all photos from each restaurant
+                for (const restaurant of restaurants) {
+                    const restaurantPhotos = await imageService.getRestaurantImages(restaurant.id);
+                    photos = [...photos, ...restaurantPhotos];
+                }
+            } else {
+                // Get photos for specific restaurant
+                photos = await imageService.getRestaurantImages(restaurantId);
             }
             
             // If no photos, show empty state
@@ -123,26 +149,22 @@ const GalleryModule = (function() {
             for (const photo of photos) {
                 try {
                     // Get restaurant name
-                    const restaurant = restaurants.find(r => r.id === photo.restaurantId);
-                    const restaurantName = restaurant ? restaurant.name : 'Unknown Restaurant';
+                    const restaurantName = restaurantMap[photo.restaurantId] || 'Unknown Restaurant';
                     
-                    // Get image URL from storage with fallback
-                    const imageUrl = await StorageModule.getImageURL(photo.id.toString(), true);
-                    
-                    // Create gallery item even if image URL is null
+                    // Create gallery item
                     const galleryItem = document.createElement('div');
                     galleryItem.className = 'gallery-item';
                     galleryItem.dataset.id = photo.id;
                     galleryItem.dataset.restaurantId = photo.restaurantId;
                     
                     // Add appropriate content based on whether image loaded
-                    if (imageUrl) {
+                    if (photo.url) {
                         galleryItem.innerHTML = `
                             <div class="gallery-item-image">
-                                <img src="${imageUrl}" alt="${restaurantName} photo">
+                                <img src="${photo.url}" alt="${ValidationService.sanitizeString(restaurantName)} photo">
                             </div>
                             <div class="gallery-item-info">
-                                <h4>${restaurantName}</h4>
+                                <h4>${ValidationService.sanitizeString(restaurantName)}</h4>
                                 <p>Photo ID: ${photo.id}</p>
                             </div>
                             <div class="gallery-item-actions">
@@ -158,7 +180,7 @@ const GalleryModule = (function() {
                                 <div class="error-badge" title="Image data not found"><i class="fas fa-exclamation-triangle"></i></div>
                             </div>
                             <div class="gallery-item-info">
-                                <h4>${restaurantName}</h4>
+                                <h4>${ValidationService.sanitizeString(restaurantName)}</h4>
                                 <p>Photo ID: ${photo.id} (Data Missing)</p>
                             </div>
                             <div class="gallery-item-actions">
@@ -169,11 +191,11 @@ const GalleryModule = (function() {
                     }
                     
                     // Add click handler for view button if image exists
-                    if (imageUrl) {
+                    if (photo.url) {
                         const viewButton = galleryItem.querySelector('.btn-icon[title="View"]');
                         if (viewButton) {
                             viewButton.addEventListener('click', function() {
-                                viewImage(photo.id, imageUrl, restaurantName);
+                                viewImage(photo.id, photo.url, restaurantName);
                             });
                         }
                     }
@@ -182,10 +204,15 @@ const GalleryModule = (function() {
                     const deleteButton = galleryItem.querySelector('.btn-icon[title="Delete"]');
                     if (deleteButton) {
                         deleteButton.addEventListener('click', function() {
-                            UIModule.showConfirmDialog({
-                                title: 'Delete Image',
-                                message: `Delete this image from ${restaurantName}?`,
-                                onConfirm: () => {
+                            UIUtils.showConfirmation(
+                                `Delete this image from ${restaurantName}?`,
+                                { 
+                                    title: 'Delete Image',
+                                    confirmText: 'Delete',
+                                    confirmClass: 'btn-danger'
+                                }
+                            ).then(confirmed => {
+                                if (confirmed) {
                                     deleteImage(photo.id, photo.restaurantId);
                                 }
                             });
@@ -194,12 +221,12 @@ const GalleryModule = (function() {
                     
                     galleryGrid.appendChild(galleryItem);
                 } catch (error) {
-                    console.error(`Error loading image ${photo.id}:`, error);
+                    ErrorHandlingService.handleError(error, `Processing gallery image ${photo.id}`);
                     // Continue with other images despite errors
                 }
             }
         } catch (error) {
-            console.error('Error loading gallery images:', error);
+            ErrorHandlingService.handleError(error, 'Loading gallery images');
             galleryGrid.innerHTML = '<div class="error-state">Error loading images</div>';
         }
     }
@@ -218,11 +245,11 @@ const GalleryModule = (function() {
         modal.innerHTML = `
             <div class="modal-content">
                 <div class="modal-header">
-                    <h3>${restaurantName}</h3>
+                    <h3>${ValidationService.sanitizeString(restaurantName)}</h3>
                     <button class="close-modal"><i class="fas fa-times"></i></button>
                 </div>
                 <div class="modal-body">
-                    <img src="${imageUrl}" alt="${restaurantName} photo">
+                    <img src="${imageUrl}" alt="${ValidationService.sanitizeString(restaurantName)} photo">
                 </div>
             </div>
         `;
@@ -252,34 +279,29 @@ const GalleryModule = (function() {
      */
     async function deleteImage(imageId, restaurantId) {
         try {
-            // Remove from storage
-            await StorageModule.deleteImage(imageId.toString());
+            // Get image service
+            const imageService = ServiceRegistry.getImageService();
             
-            // Remove from restaurantPhotos in localStorage
-            const photos = JSON.parse(localStorage.getItem('restaurantPhotos') || '[]');
-            const updatedPhotos = photos.filter(photo => photo.id != imageId);
-            localStorage.setItem('restaurantPhotos', JSON.stringify(updatedPhotos));
+            // Delete image
+            await imageService.deleteImage(imageId);
             
             // Reload gallery
             const filterSelect = document.querySelector('#gallery-restaurant-filter');
             const currentFilter = filterSelect ? filterSelect.value : 'all';
             loadGalleryImages(currentFilter);
             
-            // Update stats
-            if (typeof updateAppStats === 'function') {
-                updateAppStats();
-            }
-            
-            UIModule.showToast('Image deleted successfully', 'success');
+            // Show success notification
+            UIUtils.showNotification('Image deleted successfully', 'success');
         } catch (error) {
-            console.error('Error deleting image:', error);
-            UIModule.showToast('Error deleting image', 'error');
+            ErrorHandlingService.handleError(error, 'Deleting image');
+            UIUtils.showNotification(`Error deleting image: ${error.message}`, 'error');
         }
     }
 
     // Public API
     return {
-        init: init,
-        loadGalleryImages: loadGalleryImages
+        init,
+        loadGalleryImages,
+        deleteImage
     };
 })();

@@ -24,6 +24,8 @@
     <!-- Add theme color and dark mode support -->
     <meta name="theme-color" content="#7c3aed">
     <meta name="color-scheme" content="light dark">
+    <!-- Add this line in the head section of your HTML file -->
+    <link rel="stylesheet" href="css/notifications.css">
 </head>
 <body>
     <div class="app-container">
@@ -689,21 +691,32 @@
     
     <!-- Utility Modules -->
     <script src="js/utils/ui.js"></script>
-    <script src="js/utils/data.js"></script>
     <script src="js/utils/storage.js"></script>
+    <script src="js/utils/validation.js"></script>
+    <script src="js/utils/error-handling.js"></script>
+    
+    <!-- Service Modules -->
+    <script src="js/services/service-registry.js"></script>
+    <script src="js/services/restaurant-service.js"></script>
+    <script src="js/services/concept-service.js"></script>
+    <script src="js/services/curator-service.js"></script>
+    <script src="js/services/image-service.js"></script>
+    <script src="js/services/location-service.js"></script>
+    <script src="js/services/storage-service.js"></script>
     
     <!-- Feature Modules -->
     <script src="js/modules/sidebar.js"></script>
     <script src="js/modules/navigation.js"></script>
-    <script src="js/modules/form-controls.js"></script>
     <script src="js/modules/dashboard.js"></script>
     <script src="js/modules/restaurant.js"></script>
+    <script src="js/modules/restaurant-edit.js"></script>
     <script src="js/modules/concept.js"></script>
     <script src="js/modules/gallery.js"></script>
     <script src="js/modules/import-export.js"></script>
     <script src="js/modules/search.js"></script>
+    <script src="js/modules/form-controls.js"></script>
     
-    <!-- Main Application Script -->
+    <!-- Main Application -->
     <script src="js/main.js"></script>
     <script src="js/restaurant-ui.js"></script>
 </body>
