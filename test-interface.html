@@ -291,12 +291,15 @@
     <!-- Load Ajv for JSON Schema validation - using browser-compatible version -->
     <script src="https://cdn.jsdelivr.net/npm/ajv@8.12.0/dist/ajv.bundle.js"></script>
     
+    <!-- Load JSZip for ZIP file handling -->
+    <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+    
     <!-- Load application JavaScript files in the correct order -->
     <script src="js/indexedDB-database.js"></script>
     <script src="js/concierge-data.js"></script>
-    <script src="js/restaurant-model.js"></script>
     <script src="js/import-export-manager.js"></script>
     <script src="js/formats/json-format-handler.js"></script>
+    <script src="js/formats/zip-format-handler.js"></script>
 
     <script>
         /**

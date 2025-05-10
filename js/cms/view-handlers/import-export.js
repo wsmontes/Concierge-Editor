@@ -8,6 +8,7 @@
  *   - concierge-data.js - For database operations
  *   - import-export-manager.js - For import/export operations
  *   - ui-manager.js - For UI components
+ *   - JSZip - For handling ZIP files (loaded externally)
  */
 
 const ImportExportView = (() => {
@@ -69,8 +70,9 @@ const ImportExportView = (() => {
                                     <label for="exportFormat" class="form-label">Export Format</label>
                                     <select id="exportFormat" class="form-select">
                                         <option value="json" selected>JSON</option>
+                                        <option value="zip">ZIP Archive (with media files)</option>
                                     </select>
-                                    <div class="form-text">Currently, only JSON format is supported.</div>
+                                    <div class="form-text">Select ZIP to include images and media files.</div>
                                 </div>
                                 
                                 <div class="mb-3">
@@ -83,6 +85,12 @@ const ImportExportView = (() => {
                                     <label class="form-check-label" for="prettyPrint">Pretty Print</label>
                                     <div class="form-text">Makes the export file human-readable but slightly larger.</div>
                                 </div>
+                                
+                                <div class="mb-3 form-check" id="includeMediaContainer">
+                                    <input type="checkbox" class="form-check-input" id="includeMedia" checked>
+                                    <label class="form-check-label" for="includeMedia">Include Media Files</label>
+                                    <div class="form-text">Include audio files and additional media (ZIP format only).</div>
+                                </div>
                             </form>
                         </div>
                         <div class="card-footer">
@@ -90,15 +98,13 @@ const ImportExportView = (() => {
                                 <button id="btnExportToFile" class="btn btn-primary">
                                     <i class="bi bi-download"></i> Export to File
                                 </button>
-                                
                                 <button id="btnExportToText" class="btn btn-outline-secondary">
-                                    View as Text
+                                    <i class="bi bi-file-earmark-text"></i> Export to Text
                                 </button>
                             </div>
                         </div>
                     </div>
                 </div>
-                
                 <div class="col-md-6 mb-4">
                     <!-- Import Panel -->
                     <div class="card h-100">
@@ -107,7 +113,6 @@ const ImportExportView = (() => {
                         </div>
                         <div class="card-body">
                             <p>Import data from a previously exported file. <strong class="text-danger">This will overwrite your current data.</strong></p>
-                            
                             <div class="import-tabs mb-3">
                                 <ul class="nav nav-tabs" id="importTabs" role="tablist">
                                     <li class="nav-item" role="presentation">
@@ -117,15 +122,24 @@ const ImportExportView = (() => {
                                         <button class="nav-link" id="text-tab" data-bs-toggle="tab" data-bs-target="#text-content" type="button">Import from Text</button>
                                     </li>
                                 </ul>
-                                
                                 <div class="tab-content mt-3" id="importTabsContent">
                                     <div class="tab-pane fade show active" id="file-content" role="tabpanel">
                                         <div class="mb-3">
                                             <label for="importFile" class="form-label">Select File</label>
-                                            <input type="file" class="form-control" id="importFile" accept=".json">
+                                            <input type="file" class="form-control" id="importFile" accept=".json,.zip">
+                                            <div class="form-text">Supported formats: JSON (.json), ZIP archive (.zip)</div>
+                                        </div>
+                                        <div class="mb-3">
+                                            <div class="alert alert-info small">
+                                                <strong><i class="bi bi-info-circle"></i> ZIP File Requirements:</strong>
+                                                <ul class="mb-0 mt-1">
+                                                    <li>Should contain a <code>data.json</code> file (or any JSON file) at the root</li>
+                                                    <li>Images should be in an <code>images</code> folder (optional)</li>
+                                                    <li>Media files should be in a <code>media</code> folder (optional)</li>
+                                                </ul>
+                                            </div>
                                         </div>
                                     </div>
-                                    
                                     <div class="tab-pane fade" id="text-content" role="tabpanel">
                                         <div class="mb-3">
                                             <label for="importText" class="form-label">Paste JSON Data</label>
@@ -134,7 +148,6 @@ const ImportExportView = (() => {
                                     </div>
                                 </div>
                             </div>
-                            
                             <div id="validationResults" class="d-none">
                                 <h6>Validation Results</h6>
                                 <div id="validationContent" class="alert"></div>
@@ -145,7 +158,6 @@ const ImportExportView = (() => {
                                 <button id="btnValidateImport" class="btn btn-outline-primary">
                                     Validate Import Data
                                 </button>
-                                
                                 <button id="btnImport" class="btn btn-danger" disabled>
                                     <i class="bi bi-upload"></i> Import Data
                                 </button>
@@ -181,7 +193,7 @@ const ImportExportView = (() => {
     
     /**
      * Updates the database connection status indicator
-     */
+     */ 
     const updateConnectionStatus = () => {
         const statusElement = document.getElementById('dbConnectionStatus');
         if (!statusElement) return;
@@ -210,6 +222,9 @@ const ImportExportView = (() => {
         document.getElementById('btnValidateImport')?.addEventListener('click', handleValidateImport);
         document.getElementById('btnImport')?.addEventListener('click', handleImport);
         
+        // Format change
+        document.getElementById('exportFormat')?.addEventListener('change', handleFormatChange);
+        
         // Import file input change
         document.getElementById('importFile')?.addEventListener('change', () => {
             resetImportState();
@@ -219,11 +234,27 @@ const ImportExportView = (() => {
         document.getElementById('importText')?.addEventListener('input', () => {
             resetImportState();
         });
+        
+        // Initialize format-specific UI elements
+        handleFormatChange();
+    };
+    
+    /**
+     * Handles format change to update UI elements
+     */
+    const handleFormatChange = () => {
+        const formatSelect = document.getElementById('exportFormat');
+        const includeMediaContainer = document.getElementById('includeMediaContainer');
+        
+        if (formatSelect && includeMediaContainer) {
+            // Show media option only for ZIP format
+            includeMediaContainer.style.display = formatSelect.value === 'zip' ? 'block' : 'none';
+        }
     };
     
     /**
      * Resets the import state when input changes
-     */
+     */    
     const resetImportState = () => {
         state.importedData = null;
         state.validationResult = null;
@@ -258,16 +289,20 @@ const ImportExportView = (() => {
             const filename = document.getElementById('exportFilename').value.trim() || 'concierge-data-export';
             const format = document.getElementById('exportFormat').value;
             const pretty = document.getElementById('prettyPrint').checked;
+            const includeMedia = document.getElementById('includeMedia')?.checked ?? true;
             
             // Set export format and options
             state.exportFormat = format;
-            state.exportOptions.pretty = pretty;
+            state.exportOptions = {
+                pretty,
+                includeMedia
+            };
             
             // Show loading toast
             UIManager.showToast('info', 'Exporting Data', 'Preparing export data...');
             
             // Perform export
-            await ImportExportManager.exportToFile(filename, format, { pretty });
+            await ImportExportManager.exportToFile(filename, format, state.exportOptions);
             
             // Show success toast
             UIManager.showToast('success', 'Export Successful', 'Data has been exported successfully.');
@@ -291,16 +326,26 @@ const ImportExportView = (() => {
             // Get export options
             const format = document.getElementById('exportFormat').value;
             const pretty = document.getElementById('prettyPrint').checked;
+            const includeMedia = document.getElementById('includeMedia')?.checked ?? true;
             
             // Set export format and options
             state.exportFormat = format;
-            state.exportOptions.pretty = pretty;
+            state.exportOptions = {
+                pretty,
+                includeMedia
+            };
             
             // Show loading toast
             UIManager.showToast('info', 'Generating Preview', 'Preparing data preview...');
             
+            // Only allow text preview for JSON format, not ZIP
+            if (format !== 'json') {
+                UIManager.showToast('warning', 'Format Not Supported', 'Text preview is only available for JSON format.');
+                return;
+            }
+            
             // Perform export
-            const exportedText = await ImportExportManager.exportToString(format, { pretty });
+            const exportedText = await ImportExportManager.exportToString(format, state.exportOptions);
             
             // Display in modal
             const textArea = document.getElementById('exportTextPreview');
@@ -311,7 +356,6 @@ const ImportExportView = (() => {
             // Show modal
             const modal = new bootstrap.Modal(document.getElementById('exportTextModal'));
             modal.show();
-            
         } catch (error) {
             console.error('Export error:', error);
             UIManager.showToast('danger', 'Export Error', `Failed to generate export text: ${error.message}`);
@@ -359,6 +403,7 @@ const ImportExportView = (() => {
             if (!activeTab) return;
             
             let importData;
+            let format = 'json'; // Default format
             
             if (activeTab.id === 'file-tab') {
                 // Get file
@@ -367,14 +412,28 @@ const ImportExportView = (() => {
                     throw new Error('Please select a file to import.');
                 }
                 
-                // Read file content
                 const file = fileInput.files[0];
-                const text = await readFileAsText(file);
                 
-                // Store text for later
-                importData = text;
+                // Determine format from file extension
+                if (file.name.toLowerCase().endsWith('.zip')) {
+                    format = 'zip';
+                    
+                    // Check if the ZIP handler is available
+                    if (!ImportExportManager.getFormatHandler('zip')) {
+                        throw new Error('ZIP format handler is not available. Make sure JSZip library is loaded.');
+                    }
+                    
+                    // For ZIP files, we need to pass the raw file data
+                    importData = await readFileAsArrayBuffer(file);
+                    
+                    // Show specific message for ZIP validation
+                    UIManager.showToast('info', 'Validating ZIP Archive', 'Checking for required concierge-data.json file...');
+                } else {
+                    // For JSON files, read as text
+                    importData = await readFileAsText(file);
+                }
             } else {
-                // Get text
+                // Get text (only JSON is supported for text input)
                 const textArea = document.getElementById('importText');
                 if (!textArea || !textArea.value.trim()) {
                     throw new Error('Please enter import data in the text area.');
@@ -383,8 +442,7 @@ const ImportExportView = (() => {
                 importData = textArea.value.trim();
             }
             
-            // Call import manager to validate
-            const format = 'json'; // Currently only JSON is supported
+            // Get the appropriate handler for the format
             const handler = ImportExportManager.getFormatHandler(format);
             
             if (!handler || typeof handler.validate !== 'function') {
@@ -394,9 +452,10 @@ const ImportExportView = (() => {
             // Validate the data
             const result = await handler.validate(importData);
             
-            // Store validation result and imported data
+            // Store validation result, imported data, and format
             state.validationResult = result;
             state.importedData = importData;
+            state.importFormat = format;
             
             // Show validation results
             validationResults.classList.remove('d-none');
@@ -417,7 +476,6 @@ const ImportExportView = (() => {
                 // Keep import button disabled
                 document.getElementById('btnImport').disabled = true;
             }
-            
         } catch (error) {
             console.error('Validation error:', error);
             
@@ -484,15 +542,26 @@ const ImportExportView = (() => {
                 importButton.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Importing...';
             }
             
-            // Perform import
+            // Perform import based on the active tab and format
+            const activeTab = document.querySelector('#importTabs .nav-link.active');
             if (activeTab.id === 'file-tab') {
                 const fileInput = document.getElementById('importFile');
                 if (!fileInput || !fileInput.files || !fileInput.files[0]) {
                     throw new Error('Please select a file to import.');
                 }
                 
-                await ImportExportManager.importFromFile(fileInput.files[0]);
+                // If we're importing a ZIP file that's already been validated,
+                // we can use the stored data directly
+                if (state.importFormat === 'zip') {
+                    // Use the handler directly with our stored ArrayBuffer data
+                    const data = await ImportExportManager.getFormatHandler('zip').importData(state.importedData);
+                    await ConciergeData.data.import(data);
+                } else {
+                    // Otherwise, use the standard importFromFile method
+                    await ImportExportManager.importFromFile(fileInput.files[0]);
+                }
             } else {
+                // For text input, always use importFromString
                 await ImportExportManager.importFromString(state.importedData);
             }
             
@@ -511,12 +580,11 @@ const ImportExportView = (() => {
             if (importButton) {
                 importButton.innerHTML = '<i class="bi bi-upload"></i> Import Data';
             }
-            
         } catch (error) {
             console.error('Import error:', error);
             UIManager.showToast('danger', 'Import Error', `Failed to import data: ${error.message}`);
             
-            // Reset button state
+            // Reset button state and other UI elements
             const importButton = document.getElementById('btnImport');
             if (importButton) {
                 importButton.disabled = false;
@@ -540,6 +608,20 @@ const ImportExportView = (() => {
     };
     
     /**
+     * Reads a File object as ArrayBuffer (for binary files like ZIP)
+     * @param {File} file - The file to read
+     * @returns {Promise<ArrayBuffer>} Promise resolving with the file contents as ArrayBuffer
+     */
+    const readFileAsArrayBuffer = (file) => {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = (e) => resolve(e.target.result);
+            reader.onerror = (e) => reject(new Error('Error reading file'));
+            reader.readAsArrayBuffer(file);
+        });
+    };
+    
+    /**
      * Cleanup when leaving the view
      */
     const onExit = () => {
@@ -548,6 +630,7 @@ const ImportExportView = (() => {
         state.validationResult = null;
         state.importProgress.status = 'idle';
         state.importProgress.message = '';
+        state.importFormat = null;
     };
     
     // Public API

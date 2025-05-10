@@ -262,6 +262,41 @@ const RestaurantModel = (() => {
     }
   };
 
+  // Restaurant Photos operations
+  const restaurantPhotosOperations = {
+    getAll: async () => {
+      return await db.getAll(STORES.RESTAURANT_PHOTOS);
+    },
+    
+    getById: async (id) => {
+      return await db.getById(STORES.RESTAURANT_PHOTOS, id);
+    },
+    
+    getByRestaurantId: async (restaurantId) => {
+      return await db.queryByIndex(STORES.RESTAURANT_PHOTOS, 'by_restaurantId', restaurantId);
+    },
+    
+    add: async (photoData) => {
+      if (!photoData.restaurantId) throw new Error('RestaurantId is required');
+      if (!photoData.photoDataRef) throw new Error('PhotoDataRef is required');
+      
+      const newPhoto = {
+        ...photoData,
+        timestamp: photoData.timestamp || new Date().toISOString()
+      };
+      
+      return await db.add(STORES.RESTAURANT_PHOTOS, newPhoto);
+    },
+    
+    update: async (id, photoData) => {
+      return await db.update(STORES.RESTAURANT_PHOTOS, id, photoData);
+    },
+    
+    delete: async (id) => {
+      return await db.delete(STORES.RESTAURANT_PHOTOS, id);
+    }
+  };
+
   // Model definition
   const model = {
     schema,
@@ -271,7 +306,8 @@ const RestaurantModel = (() => {
     curators: curatorOperations,
     restaurants: restaurantOperations,
     concepts: conceptOperations,
-    restaurantConcepts: restaurantConceptsOperations
+    restaurantConcepts: restaurantConceptsOperations,
+    restaurantPhotos: restaurantPhotosOperations  // Add this line to expose the operations
   };
 
   // Register this model with ConciergeData

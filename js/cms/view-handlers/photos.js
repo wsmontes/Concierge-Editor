@@ -7,6 +7,7 @@
  * Dependencies:
  *   - concierge-data.js - For data access
  *   - ui-manager.js - For UI components
+ *   - image-storage.js - For image caching and retrieval
  */
 
 const PhotosView = (() => {
@@ -23,6 +24,61 @@ const PhotosView = (() => {
     };
     
     /**
+     * Gets and normalizes an image URL, with IndexedDB caching support
+     * @param {string} url - The image URL to normalize and potentially cache
+     * @returns {Promise<string>} - The resolved image URL or a fallback placeholder
+     */
+    const getImageUrl = async (url) => {
+        if (!url) return 'https://via.placeholder.com/300x200?text=No+Image';
+        
+        try {
+            // First check if the image is already in IndexedDB
+            const cachedImage = await ImageStorage.getImage(url);
+            if (cachedImage) {
+                return cachedImage;
+            }
+            
+            // If not in cache, normalize the URL for direct loading
+            const normalizedUrl = normalizeImageUrl(url);
+            
+            // Try to load and cache the image for future use
+            const cachedUrl = await ImageStorage.loadAndCacheImage(normalizedUrl);
+            if (cachedUrl) {
+                return cachedUrl;
+            }
+            
+            // If caching fails, try direct URL as last resort
+            return normalizedUrl;
+        } catch (error) {
+            console.error('Error resolving image URL:', error);
+            return 'https://via.placeholder.com/300x200?text=Image+Error';
+        }
+    };
+    
+    /**
+     * Normalizes image URLs to ensure proper path resolution
+     * @param {string} url - The image URL to normalize
+     * @returns {string} - The normalized URL
+     */
+    const normalizeImageUrl = (url) => {
+        if (!url) return '';
+        
+        // If URL is already absolute (starts with http:// or https://) or data URL (data:)
+        if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:')) {
+            return url;
+        }
+        
+        // For relative URLs, ensure they're properly resolved relative to the base URL
+        // Remove leading slash if present for consistent handling
+        const cleanPath = url.startsWith('/') ? url.substring(1) : url;
+        
+        // If running in development with a local server like http://127.0.0.1:5500/
+        // we need to ensure paths are correctly resolved
+        const baseUrl = window.location.origin;
+        return `${baseUrl}/${cleanPath}`;
+    };
+    
+    /**
      * Initializes the photos view
      * @param {HTMLElement} container - The container element to render the view in
      */
@@ -34,13 +90,12 @@ const PhotosView = (() => {
         container.appendChild(UIManager.createLoadingSpinner());
         
         try {
-            // Load initial data
+            // Initialize the ImageStorage service first
+            await ImageStorage.initialize();
+            
+            // Continue with normal initialization
             await loadInitialData();
-            
-            // Render the main view
             renderPhotosView(container);
-            
-            // Set up event listeners
             setupEventListeners();
             
         } catch (error) {
@@ -241,15 +296,20 @@ const PhotosView = (() => {
         const start = (state.currentPage - 1) * state.itemsPerPage;
         const paginatedPhotos = filteredPhotos.slice(start, start + state.itemsPerPage);
         
-        return paginatedPhotos.map(photo => {
+        // First generate placeholders for all photos
+        const galleryHTML = paginatedPhotos.map((photo, index) => {
             const restaurant = state.restaurants[photo.restaurantId];
             const restaurantName = restaurant ? restaurant.name : 'Unknown Restaurant';
             
             return `
                 <div class="col-sm-6 col-md-4 col-lg-3">
                     <div class="card h-100">
-                        <img src="${photo.url}" class="card-img-top" alt="${photo.caption || 'Restaurant photo'}" 
-                            onerror="this.src='https://via.placeholder.com/300x200?text=Image+Error'" loading="lazy" />
+                        <img src="https://via.placeholder.com/300x200?text=Loading..." 
+                             class="card-img-top" 
+                             alt="${photo.caption || 'Restaurant photo'}" 
+                             id="photo-img-${photo.id}"
+                             data-photo-ref="${photo.photoDataRef}"
+                             loading="lazy" />
                         <div class="card-body">
                             <h6 class="card-title text-truncate" title="${photo.caption || 'No caption'}">${photo.caption || 'No caption'}</h6>
                             <p class="card-text small text-muted mb-0">Restaurant: ${restaurantName}</p>
@@ -269,6 +329,24 @@ const PhotosView = (() => {
                 </div>
             `;
         }).join('');
+        
+        // After HTML is generated, start loading actual images
+        setTimeout(() => {
+            paginatedPhotos.forEach(photo => {
+                const imgElement = document.getElementById(`photo-img-${photo.id}`);
+                if (imgElement) {
+                    getImageUrl(photo.photoDataRef)
+                        .then(url => {
+                            imgElement.src = url;
+                        })
+                        .catch(() => {
+                            imgElement.src = 'https://via.placeholder.com/300x200?text=Image+Error';
+                        });
+                }
+            });
+        }, 0);
+        
+        return galleryHTML;
     };
     
     /**
@@ -408,7 +486,7 @@ const PhotosView = (() => {
                     value: state.filterRestaurant || ''
                 },
                 {
-                    id: 'url',
+                    id: 'photoDataRef',
                     type: 'url',
                     label: 'Image URL',
                     placeholder: 'https://example.com/image.jpg',
@@ -436,7 +514,7 @@ const PhotosView = (() => {
         const form = UIManager.createForm(formSchema);
         
         // Add image preview functionality
-        const urlInput = form.querySelector('#url');
+        const urlInput = form.querySelector('#photoDataRef');
         
         // Create and append the preview container
         const previewContainer = document.createElement('div');
@@ -447,7 +525,7 @@ const PhotosView = (() => {
                 <p class="mb-0 text-muted">Enter a valid image URL to see a preview</p>
             </div>
         `;
-        form.querySelector('#url').closest('.mb-3').after(previewContainer);
+        form.querySelector('#photoDataRef').closest('.mb-3').after(previewContainer);
         
         // Add event listener to URL input for preview
         urlInput.addEventListener('blur', () => {
@@ -487,7 +565,7 @@ const PhotosView = (() => {
             // Prepare photo data
             const photoData = {
                 restaurantId: parseInt(formData.restaurantId),
-                url: formData.url,
+                photoDataRef: formData.photoDataRef,
                 caption: formData.caption || undefined,
                 credit: formData.credit || undefined,
                 timestamp: new Date().toISOString()
@@ -550,13 +628,16 @@ const PhotosView = (() => {
             // Get restaurant data
             const restaurant = state.restaurants[photo.restaurantId] || { name: 'Unknown Restaurant' };
             
+            // Get the cached or normalized URL
+            const imageUrl = await getImageUrl(photo.photoDataRef);
+            
             // Show details modal
             UIManager.showModal({
                 title: photo.caption || 'Photo Details',
                 content: `
                     <div class="photo-details">
                         <div class="text-center mb-3">
-                            <img src="${photo.url}" alt="${photo.caption || 'Restaurant photo'}" 
+                            <img src="${imageUrl}" alt="${photo.caption || 'Restaurant photo'}" 
                                 class="img-fluid rounded" style="max-height: 60vh;"
                                 onerror="this.src='https://via.placeholder.com/800x600?text=Image+Error'" />
                         </div>
@@ -579,12 +660,11 @@ const PhotosView = (() => {
                             ` : ''}
                             <div class="col-12">
                                 <strong>URL:</strong> 
-                                <a href="${photo.url}" target="_blank" class="text-break">${photo.url}</a>
+                                <a href="${imageUrl}" target="_blank" class="text-break">${photo.photoDataRef}</a>
                             </div>
                         </div>
                     </div>
                 `,
-                size: 'lg',
                 buttons: [
                     {
                         text: 'Delete Photo',
