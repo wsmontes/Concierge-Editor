@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Concierge Editor CMS</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.2/font/bootstrap-icons.min.css">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+    <link rel="stylesheet" href="css/cms-styles.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar Navigation -->
+        <nav id="sidebar" class="sidebar">
+            <div class="sidebar-header">
+                <h3>Concierge CMS</h3>
+                <button id="sidebarCollapseBtn" class="btn d-md-none">
+                    <i class="bi bi-x-lg"></i>
+                </button>
+            </div>
+            
+            <div class="profile-info">
+                <div class="avatar">
+                    <i class="bi bi-person-circle"></i>
+                </div>
+                <div class="user-info">
+                    <h6>Admin User</h6>
+                    <span>Administrator</span>
+                </div>
+            </div>
+
+            <ul class="nav-items">
+                <li class="nav-item active" data-view="dashboard">
+                    <a href="#"><i class="bi bi-speedometer2"></i> Dashboard</a>
+                </li>
+                <li class="nav-item" data-view="restaurants">
+                    <a href="#"><i class="bi bi-shop"></i> Restaurants</a>
+                </li>
+                <li class="nav-item" data-view="concepts">
+                    <a href="#"><i class="bi bi-tags"></i> Concepts</a>
+                </li>
+                <li class="nav-item" data-view="curators">
+                    <a href="#"><i class="bi bi-people"></i> Curators</a>
+                </li>
+                <li class="nav-item" data-view="locations">
+                    <a href="#"><i class="bi bi-geo-alt"></i> Locations</a>
+                </li>
+                <li class="nav-item" data-view="photos">
+                    <a href="#"><i class="bi bi-images"></i> Photos</a>
+                </li>
+                <li class="nav-item" data-view="import-export">
+                    <a href="#"><i class="bi bi-arrow-down-up"></i> Import/Export</a>
+                </li>
+            </ul>
+            
+            <div class="sidebar-footer">
+                <a href="#" id="darkModeToggle"><i class="bi bi-moon"></i> <span>Dark Mode</span></a>
+                <a href="https://github.com/wagnermontes/Concierge-Editor" target="_blank">
+                    <i class="bi bi-github"></i> <span>GitHub</span>
+                </a>
+            </div>
+        </nav>
+
+        <!-- Main Content Area -->
+        <div class="main-content">
+            <!-- Top Navigation Bar -->
+            <header class="top-navbar">
+                <div class="menu-toggle">
+                    <button id="sidebarToggleBtn" class="btn">
+                        <i class="bi bi-list"></i>
+                    </button>
+                </div>
+                
+                <div class="search-container">
+                    <div class="input-group">
+                        <span class="input-group-text"><i class="bi bi-search"></i></span>
+                        <input type="text" id="globalSearch" class="form-control" placeholder="Search anything...">
+                    </div>
+                    <div id="searchResults" class="search-results-dropdown d-none">
+                        <!-- Search results will appear here -->
+                    </div>
+                </div>
+                
+                <div class="top-right-actions">
+                    <div class="notification-bell">
+                        <i class="bi bi-bell"></i>
+                        <span class="badge">3</span>
+                    </div>
+                    <div class="database-status">
+                        <span id="dbStatusIndicator" class="status-indicator"></span>
+                        <span id="dbStatusText">Database: Disconnected</span>
+                    </div>
+                </div>
+            </header>
+
+            <!-- Content Wrapper -->
+            <div class="content-wrapper">
+                <!-- Views will be loaded here -->
+                <div id="viewContainer"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast notification element -->
+    <div id="toastContainer" class="toast-container position-fixed bottom-0 end-0 p-3"></div>
+
+    <!-- Modal Container -->
+    <div class="modal fade" id="appModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modalTitle">Modal Title</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body" id="modalContent">
+                    <!-- Modal content will be loaded dynamically -->
+                </div>
+                <div class="modal-footer" id="modalFooter">
+                    <!-- Modal buttons will be loaded dynamically -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Load Required Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    
+    <!-- Load Core Application Scripts -->
+    <script src="js/indexedDB-database.js"></script>
+    <script src="js/concierge-data.js"></script>
+    <script src="js/restaurant-model.js"></script>
+    <script src="js/import-export-manager.js"></script>
+    <script src="js/formats/json-format-handler.js"></script>
+    
+    <!-- Load CMS Application Scripts - REORDERED -->
+    <script src="js/cms/ui-manager.js"></script>
+    <script src="js/cms/search-manager.js"></script>
+    
+    <!-- Load View Handlers first -->
+    <script src="js/cms/view-handlers/dashboard.js"></script>
+    <script src="js/cms/view-handlers/restaurants.js"></script>
+    <script src="js/cms/view-handlers/concepts.js"></script>
+    <script src="js/cms/view-handlers/curators.js"></script>
+    <script src="js/cms/view-handlers/locations.js"></script>
+    <script src="js/cms/view-handlers/photos.js"></script>
+    <script src="js/cms/view-handlers/import-export.js"></script>
+    
+    <!-- Load Router after view handlers -->
+    <script src="js/cms/router.js"></script>
+    
+    <!-- Load App last since it depends on Router -->
+    <script src="js/cms/app.js"></script>
+</body>
+</html>
