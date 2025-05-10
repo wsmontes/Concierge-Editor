@@ -76,24 +76,44 @@ const LocationsView = (() => {
             throw new Error('Restaurant model not found');
         }
         
-        // Load locations and restaurants in parallel
-        const [locations, restaurants] = await Promise.all([
-            restaurantModel.restaurantLocations.getAll(),
-            restaurantModel.restaurants.getAll()
-        ]);
-        
-        // Create a map of restaurant ID to restaurant object for easy lookup
-        const restaurantMap = {};
-        restaurants.forEach(restaurant => {
-            restaurantMap[restaurant.id] = restaurant;
-        });
-        
-        // Store in state
-        state.locations = locations;
-        state.restaurants = restaurantMap;
-        
-        // Calculate total pages
-        state.totalPages = Math.ceil(state.locations.length / state.itemsPerPage) || 1;
+        try {
+            // Load data safely with validation checks
+            let locations = [];
+            let restaurants = [];
+
+            // Check if restaurantLocations exists and has getAll method before calling
+            if (restaurantModel.restaurantLocations && 
+                typeof restaurantModel.restaurantLocations.getAll === 'function') {
+                locations = await restaurantModel.restaurantLocations.getAll() || [];
+            } else {
+                console.info('Restaurant locations functionality appears to be missing. This may be expected if locations are not yet implemented.');
+                locations = [];
+            }
+            
+            // Always load restaurants since they should be available
+            restaurants = await restaurantModel.restaurants.getAll() || [];
+            
+            // Store data in state
+            state.locations = locations;
+            
+            // Create a lookup map of restaurants by ID for quick reference
+            state.restaurants = {};
+            restaurants.forEach(restaurant => {
+                state.restaurants[restaurant.id] = restaurant;
+            });
+            
+            // Calculate pagination
+            const filteredLocations = getFilteredLocations();
+            state.totalPages = Math.ceil(filteredLocations.length / state.itemsPerPage) || 1;
+            
+            // Adjust current page if needed
+            if (state.currentPage > state.totalPages) {
+                state.currentPage = state.totalPages;
+            }
+        } catch (error) {
+            console.error('Error loading location data:', error);
+            throw new Error(`Failed to load location data: ${error.message}`);
+        }
     };
     
     /**

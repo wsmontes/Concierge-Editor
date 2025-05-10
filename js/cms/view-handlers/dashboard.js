@@ -34,6 +34,9 @@ const DashboardView = (() => {
         container.appendChild(UIManager.createLoadingSpinner());
         
         try {
+            // Add required CSS for chart containers
+            addChartStylesIfNeeded();
+            
             // Load dashboard data
             await loadDashboardData();
             
@@ -52,6 +55,29 @@ const DashboardView = (() => {
                     'bi-exclamation-triangle'
                 )
             );
+        }
+    };
+    
+    /**
+     * Adds required CSS styles for charts if not already present
+     */
+    const addChartStylesIfNeeded = () => {
+        if (!document.getElementById('dashboard-chart-styles')) {
+            const style = document.createElement('style');
+            style.id = 'dashboard-chart-styles';
+            style.textContent = `
+                .chart-container {
+                    position: relative;
+                    height: 250px !important;
+                    max-height: 250px !important;
+                    width: 100%;
+                    overflow: hidden !important;
+                }
+                .chart-container canvas {
+                    max-height: 250px !important;
+                }
+            `;
+            document.head.appendChild(style);
         }
     };
     
@@ -175,8 +201,8 @@ const DashboardView = (() => {
                         <div class="card-header">
                             <h5 class="card-title mb-0">Concepts by Category</h5>
                         </div>
-                        <div class="card-body">
-                            <canvas id="conceptsByCategory" height="250"></canvas>
+                        <div class="card-body chart-container">
+                            <canvas id="conceptsByCategory"></canvas>
                         </div>
                     </div>
                 </div>
@@ -186,7 +212,7 @@ const DashboardView = (() => {
                         <div class="card-header">
                             <h5 class="card-title mb-0">Restaurants by Curator</h5>
                         </div>
-                        <div class="card-body fixed-height-chart-container">
+                        <div class="card-body chart-container">
                             <canvas id="restaurantsByCurator"></canvas>
                         </div>
                     </div>
@@ -207,18 +233,6 @@ const DashboardView = (() => {
                 </div>
             </div>
         `;
-
-        // Add custom CSS for chart container height
-        const style = document.createElement('style');
-        style.textContent = `
-            .fixed-height-chart-container {
-                height: 250px;
-                max-height: 250px;
-                position: relative;
-                overflow: hidden;
-            }
-        `;
-        document.head.appendChild(style);
     };
     
     /**
@@ -317,11 +331,39 @@ const DashboardView = (() => {
         });
         
         // Prepare data for chart
-        const labels = Object.keys(categoryCounts);
-        const data = Object.values(categoryCounts);
+        let labels = Object.keys(categoryCounts);
+        let data = Object.values(categoryCounts);
+        
+        // If too many categories, group smaller ones as "Other"
+        const MAX_CATEGORIES = 7;
+        if (labels.length > MAX_CATEGORIES) {
+            // Sort by count (descending)
+            const sortedEntries = labels.map((label, i) => ({
+                label,
+                count: data[i]
+            })).sort((a, b) => b.count - a.count);
+            
+            // Keep top categories
+            const topCategories = sortedEntries.slice(0, MAX_CATEGORIES - 1);
+            
+            // Sum the rest into "Other"
+            const otherCategories = sortedEntries.slice(MAX_CATEGORIES - 1);
+            const otherCount = otherCategories.reduce((sum, item) => sum + item.count, 0);
+            
+            labels = topCategories.map(item => item.label);
+            if (otherCount > 0) {
+                labels.push('Other');
+            }
+            
+            data = topCategories.map(item => item.count);
+            if (otherCount > 0) {
+                data.push(otherCount);
+            }
+        }
+        
         const backgroundColors = generateColorPalette(labels.length);
         
-        // Create chart
+        // Create chart with fixed dimensions
         state.chartInstances.conceptsByCategory = new Chart(canvas, {
             type: 'pie',
             data: {
@@ -337,7 +379,18 @@ const DashboardView = (() => {
                 maintainAspectRatio: false,
                 plugins: {
                     legend: {
-                        position: 'right'
+                        position: 'right',
+                        labels: {
+                            boxWidth: 12,
+                            font: {
+                                size: 11
+                            }
+                        }
+                    }
+                },
+                layout: {
+                    padding: {
+                        bottom: 10
                     }
                 }
             }
@@ -370,8 +423,8 @@ const DashboardView = (() => {
         let labels = Object.keys(curatorCounts).map(id => curatorLabels[id] || `Curator #${id}`);
         let data = Object.values(curatorCounts);
         
-        // If too many curators, limit display and add a "Others" category
-        const MAX_DISPLAY_CURATORS = 8;
+        // If too many curators, limit display and add an "Other" category
+        const MAX_DISPLAY_CURATORS = 6;
         if (labels.length > MAX_DISPLAY_CURATORS) {
             // Sort by number of restaurants (descending)
             const sortedEntries = Object.entries(curatorCounts)
@@ -385,22 +438,22 @@ const DashboardView = (() => {
             // Take top curators
             const topCurators = sortedEntries.slice(0, MAX_DISPLAY_CURATORS - 1);
             
-            // Sum the rest into "Others"
+            // Sum the rest into "Other"
             const otherCurators = sortedEntries.slice(MAX_DISPLAY_CURATORS - 1);
             const othersCount = otherCurators.reduce((sum, item) => sum + item.count, 0);
             
             // Create new arrays
             labels = topCurators.map(item => item.label);
-            labels.push('Others');
-            
             data = topCurators.map(item => item.count);
-            data.push(othersCount);
+            
+            // Only add "Other" if there are actually other curators
+            if (othersCount > 0) {
+                labels.push('Other');
+                data.push(othersCount);
+            }
         }
         
-        // Always use horizontal bar for better display
-        const isHorizontal = true;
-        
-        // Create chart with fixed height configuration
+        // Create chart with horizontal bar configuration
         state.chartInstances.restaurantsByCurator = new Chart(canvas, {
             type: 'bar',
             data: {
@@ -415,47 +468,34 @@ const DashboardView = (() => {
             },
             options: {
                 responsive: true,
-                maintainAspectRatio: true,
-                indexAxis: isHorizontal ? 'y' : 'x', 
+                maintainAspectRatio: false,
+                indexAxis: 'y',  // Horizontal bars are more space efficient
                 plugins: {
                     legend: {
-                        display: false
-                    },
-                    tooltip: {
-                        callbacks: {
-                            title: function(context) {
-                                return context[0].label;
-                            },
-                            label: function(context) {
-                                return `Restaurants: ${context.raw}`;
-                            }
-                        }
+                        display: false  // Hide legend to save space
                     }
                 },
                 scales: {
                     y: {
                         beginAtZero: true,
                         grid: {
-                            display: false
+                            display: false,
+                            drawBorder: true
                         }
                     },
                     x: {
                         beginAtZero: true,
                         ticks: {
-                            precision: 0,
-                            stepSize: 1
+                            precision: 0, // Whole numbers only
+                            stepSize: 1,
+                            callback: function(value) {
+                                // Only show integers, and limit number of ticks
+                                return Number.isInteger(value) ? value : '';
+                            }
                         },
                         grid: {
                             color: 'rgba(0, 0, 0, 0.05)'
                         }
-                    }
-                },
-                layout: {
-                    padding: {
-                        left: 10,
-                        right: 10,
-                        top: 0,
-                        bottom: 10
                     }
                 }
             }
@@ -506,6 +546,12 @@ const DashboardView = (() => {
             }
         }
         state.chartInstances = {};
+
+        // Remove dashboard specific styles
+        const style = document.getElementById('dashboard-chart-styles');
+        if (style) {
+            style.remove();
+        }
     };
     
     // Public API

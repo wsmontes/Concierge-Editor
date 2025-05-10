@@ -1,8 +1,8 @@
 /**
  * photos.js
  * 
- * Purpose: Implements the photo management view for adding, viewing,
- * and organizing restaurant photos in the CMS.
+ * Purpose: Implements the photos management view for creating, editing,
+ * and managing restaurant photos in the CMS.
  * 
  * Dependencies:
  *   - concierge-data.js - For data access
@@ -17,8 +17,8 @@ const PhotosView = (() => {
         currentPage: 1,
         itemsPerPage: 12,
         totalPages: 1,
+        sortOrder: 'newest',
         filterRestaurant: null,
-        sortOrder: 'newest',  // newest, oldest
         filterText: ''
     };
     
@@ -68,24 +68,44 @@ const PhotosView = (() => {
             throw new Error('Restaurant model not found');
         }
         
-        // Load photos and restaurants in parallel
-        const [photos, restaurants] = await Promise.all([
-            restaurantModel.restaurantPhotos.getAll(),
-            restaurantModel.restaurants.getAll()
-        ]);
-        
-        // Create a map of restaurant ID to restaurant object for easy lookup
-        const restaurantMap = {};
-        restaurants.forEach(restaurant => {
-            restaurantMap[restaurant.id] = restaurant;
-        });
-        
-        // Store in state
-        state.photos = photos;
-        state.restaurants = restaurantMap;
-        
-        // Calculate total pages
-        state.totalPages = Math.ceil(state.photos.length / state.itemsPerPage) || 1;
+        try {
+            // Load data safely with validation checks
+            let photos = [];
+            let restaurants = [];
+            
+            // Check if restaurantPhotos exists and has getAll method before calling
+            if (restaurantModel.restaurantPhotos && 
+                typeof restaurantModel.restaurantPhotos.getAll === 'function') {
+                photos = await restaurantModel.restaurantPhotos.getAll() || [];
+            } else {
+                console.info('Restaurant photos functionality appears to be missing or not yet implemented. This is expected during initial setup.');
+                photos = [];
+            }
+            
+            // Always load restaurants since they should be available
+            restaurants = await restaurantModel.restaurants.getAll() || [];
+            
+            // Store data in state
+            state.photos = photos;
+            
+            // Create a lookup map of restaurants by ID for quick reference
+            state.restaurants = {};
+            restaurants.forEach(restaurant => {
+                state.restaurants[restaurant.id] = restaurant;
+            });
+            
+            // Calculate pagination
+            const filteredPhotos = getFilteredPhotos();
+            state.totalPages = Math.ceil(filteredPhotos.length / state.itemsPerPage) || 1;
+            
+            // Adjust current page if needed
+            if (state.currentPage > state.totalPages) {
+                state.currentPage = state.totalPages;
+            }
+        } catch (error) {
+            console.error('Error loading photo data:', error);
+            throw new Error(`Failed to load photo data: ${error.message}`);
+        }
     };
     
     /**
