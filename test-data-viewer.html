@@ -1,0 +1,1065 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Restaurant Database Explorer</title>
+    <!-- Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Dexie.js for IndexedDB access -->
+    <script src="https://unpkg.com/dexie@3.2.2/dist/dexie.js"></script>
+    <!-- Font Awesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.2.0/css/all.min.css">
+    <style>
+        /* Additional custom styles */
+        .collapsible-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease-out;
+        }
+        .collapsible-content.show {
+            max-height: 2000px;
+        }
+        .loading {
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        pre {
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <div class="container mx-auto px-4 py-8">
+        <header class="mb-8">
+            <h1 class="text-3xl font-bold text-gray-800">Restaurant Database Explorer</h1>
+            <p class="text-gray-600 mt-2">View and explore all data from the restaurant database</p>
+            
+            <div class="flex mt-4 gap-2">
+                <button id="refreshBtn" class="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 flex items-center">
+                    <i class="fas fa-sync-alt mr-2"></i> Refresh Data
+                </button>
+                <button id="exportBtn" class="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 flex items-center">
+                    <i class="fas fa-download mr-2"></i> Export JSON
+                </button>
+                <button id="syncBtn" class="px-4 py-2 bg-purple-500 text-white rounded hover:bg-purple-600 flex items-center">
+                    <i class="fas fa-cloud-download-alt mr-2"></i> Sync Data
+                </button>
+            </div>
+            
+            <div id="statusBar" class="mt-4 p-3 bg-gray-200 rounded hidden">
+                <p id="statusMsg" class="text-gray-700"></p>
+            </div>
+        </header>
+        
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <!-- Database Status Card -->
+            <div class="bg-white rounded-lg shadow p-6">
+                <h2 class="text-xl font-bold mb-4 flex items-center">
+                    <i class="fas fa-database text-blue-500 mr-2"></i> Database Status
+                </h2>
+                <div id="dbStatus" class="text-gray-700">
+                    <p>Loading database information...</p>
+                </div>
+            </div>
+            
+            <!-- Sync History Card -->
+            <div class="bg-white rounded-lg shadow p-6">
+                <h2 class="text-xl font-bold mb-4 flex items-center">
+                    <i class="fas fa-history text-purple-500 mr-2"></i> Sync History
+                </h2>
+                <div id="syncHistory" class="text-gray-700">
+                    <p>Loading sync history...</p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Data Explorer Section -->
+        <div class="mt-8">
+            <ul class="flex flex-wrap border-b border-gray-200">
+                <li class="mr-2" data-tab="restaurants">
+                    <a href="#restaurants" class="inline-block py-2 px-4 text-blue-500 hover:text-blue-700 font-medium">Restaurants</a>
+                </li>
+                <li class="mr-2" data-tab="curators">
+                    <a href="#curators" class="inline-block py-2 px-4 text-gray-500 hover:text-gray-700 font-medium">Curators</a>
+                </li>
+                <li class="mr-2" data-tab="concepts">
+                    <a href="#concepts" class="inline-block py-2 px-4 text-gray-500 hover:text-gray-700 font-medium">Concepts</a>
+                </li>
+                <li class="mr-2" data-tab="locations">
+                    <a href="#locations" class="inline-block py-2 px-4 text-gray-500 hover:text-gray-700 font-medium">Locations</a>
+                </li>
+                <li class="mr-2" data-tab="settings">
+                    <a href="#settings" class="inline-block py-2 px-4 text-gray-500 hover:text-gray-700 font-medium">Settings</a>
+                </li>
+            </ul>
+            
+            <div class="bg-white rounded-lg shadow p-6 mt-2">
+                <!-- Tab content containers -->
+                <div id="restaurants-content" class="data-content">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-xl font-bold">Restaurants</h3>
+                        <div class="flex gap-2">
+                            <select id="restaurant-filter" class="border rounded px-3 py-2">
+                                <option value="all">All Restaurants</option>
+                                <option value="local">Local Only</option>
+                                <option value="remote">Remote Only</option>
+                                <option value="unsynced">Unsynced Only</option>
+                            </select>
+                            <input type="text" id="restaurant-search" placeholder="Search restaurants..." 
+                                class="border rounded px-3 py-2">
+                        </div>
+                    </div>
+                    <div id="restaurants-data" class="mt-4">
+                        <p>Loading restaurant data...</p>
+                    </div>
+                </div>
+                
+                <div id="curators-content" class="data-content hidden">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-xl font-bold">Curators</h3>
+                        <div class="flex gap-2">
+                            <select id="curator-filter" class="border rounded px-3 py-2">
+                                <option value="all">All Curators</option>
+                                <option value="local">Local Only</option>
+                                <option value="remote">Remote Only</option>
+                            </select>
+                            <input type="text" id="curator-search" placeholder="Search curators..." 
+                                class="border rounded px-3 py-2">
+                        </div>
+                    </div>
+                    <div id="curators-data" class="mt-4">
+                        <p>Loading curator data...</p>
+                    </div>
+                </div>
+                
+                <div id="concepts-content" class="data-content hidden">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-xl font-bold">Concepts</h3>
+                        <div class="flex gap-2">
+                            <select id="concept-category" class="border rounded px-3 py-2">
+                                <option value="all">All Categories</option>
+                            </select>
+                            <input type="text" id="concept-search" placeholder="Search concepts..." 
+                                class="border rounded px-3 py-2">
+                        </div>
+                    </div>
+                    <div id="concepts-data" class="mt-4">
+                        <p>Loading concept data...</p>
+                    </div>
+                </div>
+                
+                <div id="locations-content" class="data-content hidden">
+                    <h3 class="text-xl font-bold mb-4">Locations</h3>
+                    <div id="locations-data" class="mt-4">
+                        <p>Loading location data...</p>
+                    </div>
+                    <div id="map-container" class="h-96 bg-gray-200 mt-4 rounded">
+                        <p class="text-center py-4">Map will be displayed here if available</p>
+                    </div>
+                </div>
+                
+                <div id="settings-content" class="data-content hidden">
+                    <h3 class="text-xl font-bold mb-4">Settings</h3>
+                    <div id="settings-data" class="mt-4">
+                        <p>Loading settings data...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Database Interaction Script -->
+    <script type="module">
+        // Initialize Dexie database
+        const db = new Dexie('RestaurantCurator');
+        
+        // Define schema based on DatabaseService.js
+        db.version(6).stores({
+            curators: '++id, name, lastActive, serverId, origin',
+            concepts: '++id, category, value, timestamp, [category+value]',
+            restaurants: '++id, name, curatorId, timestamp, transcription, description, origin, source, serverId',
+            restaurantConcepts: '++id, restaurantId, conceptId',
+            restaurantPhotos: '++id, restaurantId, photoData',
+            restaurantLocations: '++id, restaurantId, latitude, longitude, address',
+            settings: 'key'
+        });
+        
+        // UI Elements
+        const elements = {
+            refreshBtn: document.getElementById('refreshBtn'),
+            exportBtn: document.getElementById('exportBtn'),
+            syncBtn: document.getElementById('syncBtn'),
+            statusBar: document.getElementById('statusBar'),
+            statusMsg: document.getElementById('statusMsg'),
+            dbStatus: document.getElementById('dbStatus'),
+            syncHistory: document.getElementById('syncHistory'),
+            tabs: document.querySelectorAll('[data-tab]'),
+            tabContents: document.querySelectorAll('.data-content'),
+            restaurantFilter: document.getElementById('restaurant-filter'),
+            restaurantSearch: document.getElementById('restaurant-search'),
+            curatorFilter: document.getElementById('curator-filter'),
+            curatorSearch: document.getElementById('curator-search'),
+            conceptCategory: document.getElementById('concept-category'),
+            conceptSearch: document.getElementById('concept-search')
+        };
+        
+        // Initialize the page
+        async function initialize() {
+            try {
+                await loadDatabaseStatus();
+                await loadSyncHistory();
+                setupEventListeners();
+                loadTabData('restaurants'); // Default tab
+                
+                showStatus('Database Explorer initialized successfully', 'success');
+            } catch (error) {
+                console.error('Initialization error:', error);
+                showStatus('Failed to initialize: ' + error.message, 'error');
+            }
+        }
+        
+        // Load database status
+        async function loadDatabaseStatus() {
+            try {
+                const restaurantCount = await db.restaurants.count();
+                const curatorCount = await db.curators.count();
+                const conceptCount = await db.concepts.count();
+                const locationCount = await db.restaurantLocations.count();
+                const photoCount = await db.restaurantPhotos.count();
+                
+                // Get last sync time
+                const lastSyncSetting = await db.settings.get('lastSyncTime');
+                const lastSync = lastSyncSetting ? new Date(lastSyncSetting.value) : null;
+                
+                // Format the last sync time
+                const lastSyncFormatted = lastSync 
+                    ? lastSync.toLocaleString() 
+                    : 'Never';
+                
+                elements.dbStatus.innerHTML = `
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <p><strong>Restaurants:</strong> ${restaurantCount}</p>
+                            <p><strong>Curators:</strong> ${curatorCount}</p>
+                            <p><strong>Concepts:</strong> ${conceptCount}</p>
+                        </div>
+                        <div>
+                            <p><strong>Locations:</strong> ${locationCount}</p>
+                            <p><strong>Photos:</strong> ${photoCount}</p>
+                            <p><strong>Last Sync:</strong> ${lastSyncFormatted}</p>
+                        </div>
+                    </div>
+                `;
+            } catch (error) {
+                console.error('Error loading database status:', error);
+                elements.dbStatus.innerHTML = `
+                    <p class="text-red-500">Error loading database status: ${error.message}</p>
+                `;
+            }
+        }
+        
+        // Load sync history
+        async function loadSyncHistory() {
+            try {
+                const syncHistorySetting = await db.settings.get('syncHistory');
+                const history = syncHistorySetting ? syncHistorySetting.value : [];
+                
+                if (history.length === 0) {
+                    elements.syncHistory.innerHTML = `
+                        <p class="italic text-gray-500">No sync history available</p>
+                    `;
+                    return;
+                }
+                
+                let historyHTML = `<div class="space-y-4">`;
+                
+                history.forEach((entry, index) => {
+                    const date = new Date(entry.timestamp);
+                    const formattedDate = date.toLocaleString();
+                    const statusIcon = entry.status === 'success' 
+                        ? '<i class="fas fa-check-circle text-green-500"></i>' 
+                        : '<i class="fas fa-exclamation-circle text-red-500"></i>';
+                    
+                    historyHTML += `
+                        <div class="border-b pb-2 ${index === 0 ? 'border-blue-300 bg-blue-50 p-2 rounded' : ''}">
+                            <div class="flex items-center gap-2">
+                                ${statusIcon}
+                                <span class="font-medium">${formattedDate}</span>
+                            </div>
+                            <p class="ml-6 text-sm">${entry.message}</p>
+                        </div>
+                    `;
+                });
+                
+                historyHTML += `</div>`;
+                elements.syncHistory.innerHTML = historyHTML;
+                
+            } catch (error) {
+                console.error('Error loading sync history:', error);
+                elements.syncHistory.innerHTML = `
+                    <p class="text-red-500">Error loading sync history: ${error.message}</p>
+                `;
+            }
+        }
+        
+        // Set up event listeners
+        function setupEventListeners() {
+            // Refresh button
+            elements.refreshBtn.addEventListener('click', async () => {
+                showStatus('Refreshing data...', 'info');
+                try {
+                    await loadDatabaseStatus();
+                    await loadSyncHistory();
+                    await loadTabData(getCurrentTab());
+                    showStatus('Data refreshed successfully', 'success');
+                } catch (error) {
+                    console.error('Error refreshing data:', error);
+                    showStatus('Error refreshing data: ' + error.message, 'error');
+                }
+            });
+            
+            // Export button
+            elements.exportBtn.addEventListener('click', async () => {
+                showStatus('Exporting database...', 'info');
+                try {
+                    const exportData = await exportDatabase();
+                    downloadJson(exportData, 'restaurant-database-export.json');
+                    showStatus('Database exported successfully', 'success');
+                } catch (error) {
+                    console.error('Error exporting database:', error);
+                    showStatus('Error exporting database: ' + error.message, 'error');
+                }
+            });
+            
+            // Sync button - mocked since we don't have direct access to the sync service
+            elements.syncBtn.addEventListener('click', async () => {
+                showStatus('Sync functionality needs SyncService implementation', 'warning');
+                alert('To perform real synchronization, this page needs to be integrated with the SyncService module.');
+            });
+            
+            // Tab navigation
+            elements.tabs.forEach(tab => {
+                tab.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    const tabName = tab.getAttribute('data-tab');
+                    setActiveTab(tabName);
+                    loadTabData(tabName);
+                });
+            });
+            
+            // Restaurant filter
+            if (elements.restaurantFilter) {
+                elements.restaurantFilter.addEventListener('change', () => {
+                    loadTabData('restaurants');
+                });
+            }
+            
+            if (elements.restaurantSearch) {
+                elements.restaurantSearch.addEventListener('input', debounce(() => {
+                    loadTabData('restaurants');
+                }, 300));
+            }
+            
+            // Curator filter
+            if (elements.curatorFilter) {
+                elements.curatorFilter.addEventListener('change', () => {
+                    loadTabData('curators');
+                });
+            }
+            
+            if (elements.curatorSearch) {
+                elements.curatorSearch.addEventListener('input', debounce(() => {
+                    loadTabData('curators');
+                }, 300));
+            }
+            
+            // Concept filter
+            if (elements.conceptCategory) {
+                elements.conceptCategory.addEventListener('change', () => {
+                    loadTabData('concepts');
+                });
+            }
+            
+            if (elements.conceptSearch) {
+                elements.conceptSearch.addEventListener('input', debounce(() => {
+                    loadTabData('concepts');
+                }, 300));
+            }
+        }
+        
+        // Debounce function for search inputs
+        function debounce(func, wait) {
+            let timeout;
+            return function() {
+                const context = this;
+                const args = arguments;
+                clearTimeout(timeout);
+                timeout = setTimeout(() => {
+                    func.apply(context, args);
+                }, wait);
+            };
+        }
+        
+        // Get current active tab
+        function getCurrentTab() {
+            const activeTab = document.querySelector('[data-tab] a.text-blue-500');
+            return activeTab ? activeTab.closest('[data-tab]').getAttribute('data-tab') : 'restaurants';
+        }
+        
+        // Set active tab
+        function setActiveTab(tabName) {
+            elements.tabs.forEach(tab => {
+                const link = tab.querySelector('a');
+                if (tab.getAttribute('data-tab') === tabName) {
+                    link.classList.remove('text-gray-500');
+                    link.classList.add('text-blue-500');
+                } else {
+                    link.classList.remove('text-blue-500');
+                    link.classList.add('text-gray-500');
+                }
+            });
+            
+            elements.tabContents.forEach(content => {
+                if (content.id === `${tabName}-content`) {
+                    content.classList.remove('hidden');
+                } else {
+                    content.classList.add('hidden');
+                }
+            });
+        }
+        
+        // Load data for the selected tab
+        async function loadTabData(tabName) {
+            try {
+                switch (tabName) {
+                    case 'restaurants':
+                        await loadRestaurants();
+                        break;
+                    case 'curators':
+                        await loadCurators();
+                        break;
+                    case 'concepts':
+                        await loadConcepts();
+                        break;
+                    case 'locations':
+                        await loadLocations();
+                        break;
+                    case 'settings':
+                        await loadSettings();
+                        break;
+                }
+            } catch (error) {
+                console.error(`Error loading data for ${tabName} tab:`, error);
+                document.getElementById(`${tabName}-data`).innerHTML = `
+                    <p class="text-red-500">Error loading data: ${error.message}</p>
+                `;
+            }
+        }
+        
+        // Load restaurants data
+        async function loadRestaurants() {
+            const container = document.getElementById('restaurants-data');
+            container.innerHTML = '<p class="text-gray-500"><i class="fas fa-spinner loading mr-2"></i> Loading restaurants...</p>';
+            
+            try {
+                // Apply filters
+                const filterValue = elements.restaurantFilter ? elements.restaurantFilter.value : 'all';
+                const searchValue = elements.restaurantSearch ? elements.restaurantSearch.value.toLowerCase() : '';
+                
+                let restaurants = await db.restaurants.toArray();
+                
+                // Filter by source
+                if (filterValue === 'local') {
+                    restaurants = restaurants.filter(r => r.source === 'local');
+                } else if (filterValue === 'remote') {
+                    restaurants = restaurants.filter(r => r.source === 'remote');
+                } else if (filterValue === 'unsynced') {
+                    restaurants = restaurants.filter(r => r.source === 'local' && !r.serverId);
+                }
+                
+                // Filter by search term
+                if (searchValue) {
+                    restaurants = restaurants.filter(r => 
+                        r.name.toLowerCase().includes(searchValue) || 
+                        (r.description && r.description.toLowerCase().includes(searchValue))
+                    );
+                }
+                
+                // Load curators for display
+                const curators = await db.curators.toArray();
+                const curatorMap = {};
+                curators.forEach(curator => {
+                    curatorMap[curator.id] = curator.name;
+                });
+                
+                if (restaurants.length === 0) {
+                    container.innerHTML = '<p class="italic text-gray-500">No restaurants match your filter criteria</p>';
+                    return;
+                }
+                
+                let html = `
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID</th>
+                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
+                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Curator</th>
+                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Source</th>
+                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Server ID</th>
+                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Details</th>
+                                </tr>
+                            </thead>
+                            <tbody class="bg-white divide-y divide-gray-200">
+                `;
+                
+                for (const restaurant of restaurants) {
+                    // Get related concepts
+                    const conceptRelations = await db.restaurantConcepts
+                        .where('restaurantId')
+                        .equals(restaurant.id)
+                        .toArray();
+                    
+                    const conceptIds = conceptRelations.map(rc => rc.conceptId);
+                    const concepts = await db.concepts
+                        .where('id')
+                        .anyOf(conceptIds)
+                        .toArray();
+                    
+                    // Get location
+                    const location = await db.restaurantLocations
+                        .where('restaurantId')
+                        .equals(restaurant.id)
+                        .first();
+                    
+                    // Check for photos
+                    const photoCount = await db.restaurantPhotos
+                        .where('restaurantId')
+                        .equals(restaurant.id)
+                        .count();
+                    
+                    const sourceClass = restaurant.source === 'local' ? 'text-green-600' : 'text-blue-600';
+                    const sourceIcon = restaurant.source === 'local' ? 
+                        '<i class="fas fa-laptop mr-1"></i>' : 
+                        '<i class="fas fa-cloud mr-1"></i>';
+                    
+                    const curatorName = restaurant.curatorId ? 
+                        (curatorMap[restaurant.curatorId] || 'Unknown') : 'None';
+                    
+                    html += `
+                        <tr>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${restaurant.id}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${restaurant.name}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${curatorName}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm ${sourceClass}">${sourceIcon}${restaurant.source}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${restaurant.serverId || 'N/A'}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                <button class="text-blue-500 hover:text-blue-700 toggle-details" data-id="${restaurant.id}">
+                                    <i class="fas fa-chevron-down"></i> Show
+                                </button>
+                            </td>
+                        </tr>
+                        <tr class="restaurant-details hidden" id="details-${restaurant.id}">
+                            <td colspan="6" class="px-6 py-4 bg-gray-50">
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                        <h4 class="font-medium">Information</h4>
+                                        <p class="text-sm mt-1"><strong>Created:</strong> ${new Date(restaurant.timestamp).toLocaleString()}</p>
+                                        <p class="text-sm mt-1"><strong>Description:</strong> ${restaurant.description || 'N/A'}</p>
+                                        <p class="text-sm mt-1"><strong>Transcription:</strong> ${restaurant.transcription ? 
+                                            restaurant.transcription.substring(0, 100) + (restaurant.transcription.length > 100 ? '...' : '') : 
+                                            'N/A'}</p>
+                                    </div>
+                                    <div>
+                                        <h4 class="font-medium">Metadata</h4>
+                                        <p class="text-sm mt-1"><strong>Concepts:</strong> ${concepts.length ? 
+                                            concepts.map(c => `${c.category}:${c.value}`).join(', ') : 
+                                            'None'}</p>
+                                        <p class="text-sm mt-1"><strong>Location:</strong> ${location ? 
+                                            `${location.latitude}, ${location.longitude}` : 
+                                            'No location data'}</p>
+                                        <p class="text-sm mt-1"><strong>Photos:</strong> ${photoCount}</p>
+                                    </div>
+                                </div>
+                            </td>
+                        </tr>
+                    `;
+                }
+                
+                html += `
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+                
+                container.innerHTML = html;
+                
+                // Add toggle functionality
+                document.querySelectorAll('.toggle-details').forEach(button => {
+                    button.addEventListener('click', () => {
+                        const id = button.getAttribute('data-id');
+                        const detailsRow = document.getElementById(`details-${id}`);
+                        
+                        if (detailsRow.classList.contains('hidden')) {
+                            detailsRow.classList.remove('hidden');
+                            button.innerHTML = '<i class="fas fa-chevron-up"></i> Hide';
+                        } else {
+                            detailsRow.classList.add('hidden');
+                            button.innerHTML = '<i class="fas fa-chevron-down"></i> Show';
+                        }
+                    });
+                });
+                
+            } catch (error) {
+                console.error('Error loading restaurants:', error);
+                container.innerHTML = `
+                    <p class="text-red-500">Error loading restaurants: ${error.message}</p>
+                `;
+            }
+        }
+        
+        // Load curators data
+        async function loadCurators() {
+            const container = document.getElementById('curators-data');
+            container.innerHTML = '<p class="text-gray-500"><i class="fas fa-spinner loading mr-2"></i> Loading curators...</p>';
+            
+            try {
+                // Apply filters
+                const filterValue = elements.curatorFilter ? elements.curatorFilter.value : 'all';
+                const searchValue = elements.curatorSearch ? elements.curatorSearch.value.toLowerCase() : '';
+                
+                let curators = await db.curators.toArray();
+                
+                // Filter by origin
+                if (filterValue === 'local') {
+                    curators = curators.filter(c => c.origin === 'local');
+                } else if (filterValue === 'remote') {
+                    curators = curators.filter(c => c.origin === 'remote');
+                }
+                
+                // Filter by search term
+                if (searchValue) {
+                    curators = curators.filter(c => c.name.toLowerCase().includes(searchValue));
+                }
+                
+                if (curators.length === 0) {
+                    container.innerHTML = '<p class="italic text-gray-500">No curators match your filter criteria</p>';
+                    return;
+                }
+                
+                // Get restaurant counts for each curator
+                const curatorCounts = {};
+                const restaurants = await db.restaurants.toArray();
+                
+                restaurants.forEach(restaurant => {
+                    if (restaurant.curatorId) {
+                        curatorCounts[restaurant.curatorId] = (curatorCounts[restaurant.curatorId] || 0) + 1;
+                    }
+                });
+                
+                let html = `
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID</th>
+                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
+                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Origin</th>
+                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Server ID</th>
+                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Last Active</th>
+                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Restaurants</th>
+                                </tr>
+                            </thead>
+                            <tbody class="bg-white divide-y divide-gray-200">
+                `;
+                
+                for (const curator of curators) {
+                    const originClass = curator.origin === 'local' ? 'text-green-600' : 'text-blue-600';
+                    const originIcon = curator.origin === 'local' ? 
+                        '<i class="fas fa-user-edit mr-1"></i>' : 
+                        '<i class="fas fa-cloud mr-1"></i>';
+                    
+                    const lastActiveDate = curator.lastActive ? new Date(curator.lastActive) : null;
+                    const lastActive = lastActiveDate ? lastActiveDate.toLocaleString() : 'Never';
+                    
+                    const restaurantCount = curatorCounts[curator.id] || 0;
+                    
+                    html += `
+                        <tr>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${curator.id}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${curator.name}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm ${originClass}">${originIcon}${curator.origin}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${curator.serverId || 'N/A'}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${lastActive}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${restaurantCount}</td>
+                        </tr>
+                    `;
+                }
+                
+                html += `
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+                
+                container.innerHTML = html;
+                
+            } catch (error) {
+                console.error('Error loading curators:', error);
+                container.innerHTML = `
+                    <p class="text-red-500">Error loading curators: ${error.message}</p>
+                `;
+            }
+        }
+        
+        // Load concepts data
+        async function loadConcepts() {
+            const container = document.getElementById('concepts-data');
+            container.innerHTML = '<p class="text-gray-500"><i class="fas fa-spinner loading mr-2"></i> Loading concepts...</p>';
+            
+            try {
+                // Load concepts
+                let concepts = await db.concepts.toArray();
+                
+                // Get unique categories and populate the select dropdown
+                const categories = [...new Set(concepts.map(c => c.category))];
+                
+                if (elements.conceptCategory) {
+                    // Save current selection
+                    const currentSelection = elements.conceptCategory.value;
+                    
+                    elements.conceptCategory.innerHTML = `
+                        <option value="all">All Categories</option>
+                    `;
+                    
+                    categories.forEach(category => {
+                        elements.conceptCategory.innerHTML += `
+                            <option value="${category}">${category}</option>
+                        `;
+                    });
+                    
+                    // Restore selection if it's still valid
+                    if (categories.includes(currentSelection)) {
+                        elements.conceptCategory.value = currentSelection;
+                    }
+                }
+                
+                // Apply filters
+                const categoryFilter = elements.conceptCategory ? elements.conceptCategory.value : 'all';
+                const searchValue = elements.conceptSearch ? elements.conceptSearch.value.toLowerCase() : '';
+                
+                // Filter by category
+                if (categoryFilter !== 'all') {
+                    concepts = concepts.filter(c => c.category === categoryFilter);
+                }
+                
+                // Filter by search term
+                if (searchValue) {
+                    concepts = concepts.filter(c => 
+                        c.category.toLowerCase().includes(searchValue) || 
+                        c.value.toLowerCase().includes(searchValue)
+                    );
+                }
+                
+                if (concepts.length === 0) {
+                    container.innerHTML = '<p class="italic text-gray-500">No concepts match your filter criteria</p>';
+                    return;
+                }
+                
+                // Group concepts by category
+                const conceptsByCategory = {};
+                
+                concepts.forEach(concept => {
+                    if (!conceptsByCategory[concept.category]) {
+                        conceptsByCategory[concept.category] = [];
+                    }
+                    conceptsByCategory[concept.category].push(concept);
+                });
+                
+                let html = `<div class="space-y-6">`;
+                
+                for (const category in conceptsByCategory) {
+                    html += `
+                        <div class="border rounded-lg p-4">
+                            <h3 class="text-lg font-medium text-blue-600 mb-2">${category}</h3>
+                            <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
+                    `;
+                    
+                    conceptsByCategory[category].forEach(concept => {
+                        html += `
+                            <div class="bg-gray-100 rounded p-2 flex items-center">
+                                <span class="text-sm">${concept.value}</span>
+                                <span class="ml-auto text-xs text-gray-500">#${concept.id}</span>
+                            </div>
+                        `;
+                    });
+                    
+                    html += `
+                            </div>
+                        </div>
+                    `;
+                }
+                
+                html += `</div>`;
+                container.innerHTML = html;
+                
+            } catch (error) {
+                console.error('Error loading concepts:', error);
+                container.innerHTML = `
+                    <p class="text-red-500">Error loading concepts: ${error.message}</p>
+                `;
+            }
+        }
+        
+        // Load locations data
+        async function loadLocations() {
+            const container = document.getElementById('locations-data');
+            container.innerHTML = '<p class="text-gray-500"><i class="fas fa-spinner loading mr-2"></i> Loading location data...</p>';
+            
+            try {
+                // Get all locations
+                const locations = await db.restaurantLocations.toArray();
+                
+                if (locations.length === 0) {
+                    container.innerHTML = '<p class="italic text-gray-500">No location data available</p>';
+                    return;
+                }
+                
+                // Get restaurants to match with locations
+                const restaurantMap = {};
+                const restaurants = await db.restaurants.toArray();
+                
+                restaurants.forEach(restaurant => {
+                    restaurantMap[restaurant.id] = restaurant.name;
+                });
+                
+                let html = `
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID</th>
+                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Restaurant</th>
+                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Latitude</th>
+                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Longitude</th>
+                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Address</th>
+                                </tr>
+                            </thead>
+                            <tbody class="bg-white divide-y divide-gray-200">
+                `;
+                
+                for (const location of locations) {
+                    const restaurantName = location.restaurantId ? 
+                        (restaurantMap[location.restaurantId] || 'Unknown') : 'None';
+                    
+                    html += `
+                        <tr>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${location.id}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${restaurantName}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${location.latitude}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${location.longitude}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${location.address || 'N/A'}</td>
+                        </tr>
+                    `;
+                }
+                
+                html += `
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+                
+                container.innerHTML = html;
+                
+                // Load map if the script is available
+                if (locations.length > 0 && typeof L !== 'undefined') {
+                    const mapContainer = document.getElementById('map-container');
+                    mapContainer.innerHTML = '';
+                    
+                    const map = L.map(mapContainer).setView([locations[0].latitude, locations[0].longitude], 13);
+                    
+                    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                    }).addTo(map);
+                    
+                    // Add markers for each location
+                    locations.forEach(location => {
+                        const restaurantName = location.restaurantId ? 
+                            (restaurantMap[location.restaurantId] || 'Unknown') : 'None';
+                            
+                        L.marker([location.latitude, location.longitude])
+                            .addTo(map)
+                            .bindPopup(`<b>${restaurantName}</b><br>${location.address || 'No address provided'}`);
+                    });
+                } else {
+                    const mapContainer = document.getElementById('map-container');
+                    mapContainer.innerHTML = `
+                        <div class="flex flex-col items-center justify-center h-full">
+                            <p class="mb-2">To display the map, include Leaflet.js:</p>
+                            <pre class="bg-gray-100 p-2 text-xs">
+&lt;link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" /&gt;
+&lt;script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"&gt;&lt;/script&gt;</pre>
+                        </div>
+                    `;
+                }
+                
+            } catch (error) {
+                console.error('Error loading locations:', error);
+                container.innerHTML = `
+                    <p class="text-red-500">Error loading locations: ${error.message}</p>
+                `;
+            }
+        }
+        
+        // Load settings data
+        async function loadSettings() {
+            const container = document.getElementById('settings-data');
+            container.innerHTML = '<p class="text-gray-500"><i class="fas fa-spinner loading mr-2"></i> Loading settings...</p>';
+            
+            try {
+                // Get all settings
+                const settings = await db.settings.toArray();
+                
+                if (settings.length === 0) {
+                    container.innerHTML = '<p class="italic text-gray-500">No settings available</p>';
+                    return;
+                }
+                
+                let html = `
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Key</th>
+                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Value</th>
+                                </tr>
+                            </thead>
+                            <tbody class="bg-white divide-y divide-gray-200">
+                `;
+                
+                for (const setting of settings) {
+                    let displayValue = setting.value;
+                    
+                    // Format certain values for readability
+                    if (setting.key === 'lastSyncTime' && setting.value) {
+                        displayValue = new Date(setting.value).toLocaleString();
+                    } else if (typeof setting.value === 'object') {
+                        displayValue = `<pre class="text-xs overflow-auto max-h-40">${JSON.stringify(setting.value, null, 2)}</pre>`;
+                    } else if (typeof setting.value === 'boolean') {
+                        displayValue = setting.value ? 'true' : 'false';
+                    }
+                    
+                    html += `
+                        <tr>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${setting.key}</td>
+                            <td class="px-6 py-4 text-sm text-gray-500">${displayValue}</td>
+                        </tr>
+                    `;
+                }
+                
+                html += `
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+                
+                container.innerHTML = html;
+                
+            } catch (error) {
+                console.error('Error loading settings:', error);
+                container.innerHTML = `
+                    <p class="text-red-500">Error loading settings: ${error.message}</p>
+                `;
+            }
+        }
+        
+        // Export database
+        async function exportDatabase() {
+            // Export all tables
+            const exportData = {
+                curators: await db.curators.toArray(),
+                concepts: await db.concepts.toArray(),
+                restaurants: await db.restaurants.toArray(),
+                restaurantConcepts: await db.restaurantConcepts.toArray(),
+                restaurantLocations: await db.restaurantLocations.toArray(),
+                settings: await db.settings.toArray(),
+                photoReferences: await db.restaurantPhotos.toArray().then(photos => {
+                    // Create a copy without the binary data for the JSON
+                    return photos.map(photo => {
+                        const { photoData, ...photoMetadata } = photo;
+                        return {
+                            ...photoMetadata,
+                            hasPhoto: !!photoData
+                        };
+                    });
+                }),
+                exportInfo: {
+                    timestamp: new Date().toISOString(),
+                    version: 1
+                }
+            };
+            
+            return exportData;
+        }
+        
+        // Download JSON
+        function downloadJson(data, filename) {
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            
+            setTimeout(() => {
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            }, 0);
+        }
+        
+        // Show status message
+        function showStatus(message, type = 'info') {
+            elements.statusBar.classList.remove('hidden', 'bg-green-100', 'bg-red-100', 'bg-yellow-100', 'bg-blue-100');
+            elements.statusMsg.classList.remove('text-green-700', 'text-red-700', 'text-yellow-700', 'text-blue-700');
+            
+            switch (type) {
+                case 'success':
+                    elements.statusBar.classList.add('bg-green-100');
+                    elements.statusMsg.classList.add('text-green-700');
+                    break;
+                case 'error':
+                    elements.statusBar.classList.add('bg-red-100');
+                    elements.statusMsg.classList.add('text-red-700');
+                    break;
+                case 'warning':
+                    elements.statusBar.classList.add('bg-yellow-100');
+                    elements.statusMsg.classList.add('text-yellow-700');
+                    break;
+                default: // info
+                    elements.statusBar.classList.add('bg-blue-100');
+                    elements.statusMsg.classList.add('text-blue-700');
+            }
+            
+            elements.statusMsg.textContent = message;
+            elements.statusBar.classList.remove('hidden');
+            
+            // Auto-hide success and info messages after 5 seconds
+            if (type === 'success' || type === 'info') {
+                setTimeout(() => {
+                    elements.statusBar.classList.add('hidden');
+                }, 5000);
+            }
+        }
+        
+        // Initialize the page
+        initialize();
+    </script>
+</body>
+</html>

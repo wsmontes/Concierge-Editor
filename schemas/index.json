@@ -1,9 +1,0 @@
-[
-  {
-    "name": "restaurant",
-    "title": "Restaurant Data Schema",
-    "description": "Schema for validating restaurant data formats",
-    "filename": "restaurant.schema.json",
-    "version": "1.0"
-  }
-]
