@@ -6,8 +6,8 @@
  * @depends SyncService, SettingsService
  */
 
-import syncService from './SyncService';
-import settingsService from './SettingsService';
+import syncService from './SyncService.js';
+import settingsService from './SettingsService.js';
 
 class AutoSyncService {
   constructor() {

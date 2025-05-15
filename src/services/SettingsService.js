@@ -6,11 +6,11 @@
  * @depends DatabaseService
  */
 
-import databaseService from './db/DatabaseService';
+import databaseService from './db/DatabaseService.js';
 
 class SettingsService {
   constructor() {
-    this.db = databaseService.getDatabase();
+    this.db = null;
     this.defaultSettings = {
       syncIntervalMinutes: 30,
       syncOnStartup: true,
@@ -18,6 +18,21 @@ class SettingsService {
       currentCurator: null,
       lastSyncTime: null
     };
+    
+    // Initialize the database reference when needed, not immediately
+    this._initializeDb();
+  }
+  
+  /**
+   * Initialize database reference
+   * @private
+   */
+  async _initializeDb() {
+    try {
+      this.db = await databaseService.ensureDatabase();
+    } catch (error) {
+      console.error('SettingsService: Error initializing database:', error);
+    }
   }
 
   /**
@@ -28,8 +43,8 @@ class SettingsService {
    */
   async getSetting(key, defaultValue = null) {
     try {
-      if (!this.db.isOpen()) {
-        await this.db.open();
+      if (!this.db) {
+        await this._initializeDb();
       }
       
       // Use the default from defaultSettings if available, otherwise use the provided default
@@ -51,8 +66,8 @@ class SettingsService {
    */
   async updateSetting(key, value) {
     try {
-      if (!this.db.isOpen()) {
-        await this.db.open();
+      if (!this.db) {
+        await this._initializeDb();
       }
       return await this.db.settings.put({ key, value });
     } catch (error) {

@@ -6,12 +6,25 @@
  * @depends DatabaseService
  */
 
-import databaseService from '../services/db/DatabaseService';
+import databaseService from '../services/db/DatabaseService.js';
 
 class RestaurantRepository {
   constructor() {
-    this.db = databaseService.getDatabase();
+    this.db = null;
     this.isResetting = false;
+    this._initializeDb();
+  }
+  
+  /**
+   * Initialize database reference
+   * @private
+   */
+  async _initializeDb() {
+    try {
+      this.db = await databaseService.ensureDatabase();
+    } catch (error) {
+      console.error('RestaurantRepository: Error initializing database:', error);
+    }
   }
 
   /**
@@ -26,6 +39,11 @@ class RestaurantRepository {
    */
   async getRestaurants(options = {}) {
     try {
+      // Ensure database is initialized
+      if (!this.db) {
+        await this._initializeDb();
+      }
+      
       const {
         curatorId = null,
         onlyCuratorRestaurants = true,

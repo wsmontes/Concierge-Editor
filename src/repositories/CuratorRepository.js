@@ -6,12 +6,25 @@
  * @depends DatabaseService, SettingsService
  */
 
-import databaseService from '../services/db/DatabaseService';
-import settingsService from '../services/SettingsService';
+import databaseService from '../services/db/DatabaseService.js';
+import settingsService from '../services/SettingsService.js';
 
 class CuratorRepository {
   constructor() {
-    this.db = databaseService.getDatabase();
+    this.db = null;
+    this._initializeDb();
+  }
+  
+  /**
+   * Initialize database reference
+   * @private
+   */
+  async _initializeDb() {
+    try {
+      this.db = await databaseService.ensureDatabase();
+    } catch (error) {
+      console.error('CuratorRepository: Error initializing database:', error);
+    }
   }
 
   /**
@@ -27,9 +40,8 @@ class CuratorRepository {
       console.log(`CuratorRepository: Saving curator with name: ${name}, origin: ${origin}`);
       
       // Make sure database is initialized
-      if (!this.db || !this.db.isOpen()) {
-        this.db = databaseService.getDatabase();
-        await this.db.open();
+      if (!this.db) {
+        await this._initializeDb();
       }
       
       // Save curator to database with origin and serverId

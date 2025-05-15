@@ -5,15 +5,22 @@
  * @module Services
  */
 
-import databaseService from './db/DatabaseService';
-import settingsService from './SettingsService';
-import syncService from './SyncService';
-import autoSyncService from './AutoSyncService';
+import databaseService from './db/DatabaseService.js';
+import settingsService from './SettingsService.js';
+import syncService from './SyncService.js';
+import autoSyncService from './AutoSyncService.js';
 
-// Initialize auto-sync service when imported
-autoSyncService.initialize().catch(error => {
-  console.error('Failed to initialize AutoSyncService:', error);
-});
+// Ensure database is initialized before exporting
+databaseService.ensureDatabase()
+  .then(() => {
+    // Initialize auto-sync service after database is ready
+    autoSyncService.initialize().catch(error => {
+      console.error('Failed to initialize AutoSyncService:', error);
+    });
+  })
+  .catch(err => {
+    console.error('Failed to initialize database:', err);
+  });
 
 // Export all services
 export {

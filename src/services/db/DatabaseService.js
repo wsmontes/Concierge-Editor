@@ -5,60 +5,101 @@
  * @module DatabaseService
  */
 
-import Dexie from 'dexie';
-
 class DatabaseService {
   constructor() {
     this.dbName = 'RestaurantCurator';
     this.db = null;
     this.isResetting = false;
+    this.isInitialized = false;
+    this.initializePromise = null;
     this.initializeDatabase();
   }
 
   /**
    * Initialize the database with the current schema
+   * Returns a promise that resolves when initialization is complete
+   * @returns {Promise}
    */
   initializeDatabase() {
-    try {
-      console.log('DatabaseService: Initializing database...');
-      
-      // Close any existing instance
-      if (this.db) {
-        this.db.close();
-        this.db = null;
-      }
-      
-      this.db = new Dexie(this.dbName);
-      
-      // Define database schema (version 6)
-      this.db.version(6).stores({
-        curators: '++id, name, lastActive, serverId, origin',
-        concepts: '++id, category, value, timestamp, [category+value]',
-        restaurants: '++id, name, curatorId, timestamp, transcription, description, origin, source, serverId',
-        restaurantConcepts: '++id, restaurantId, conceptId',
-        restaurantPhotos: '++id, restaurantId, photoData',
-        restaurantLocations: '++id, restaurantId, latitude, longitude, address',
-        settings: 'key'
-      });
-
-      // Open the database to ensure proper initialization
-      this.db.open().catch(error => {
-        console.error('DatabaseService: Failed to open database:', error);
-        
-        // Reset if schema error or corruption detected
-        if (error.name === 'VersionError' || 
-            error.name === 'InvalidStateError' || 
-            error.name === 'NotFoundError') {
-          console.warn('DatabaseService: Database schema issue detected, attempting reset...');
-          this.resetDatabase();
-        }
-      });
-
-      console.log('DatabaseService: Database initialized successfully');
-    } catch (error) {
-      console.error('DatabaseService: Error initializing database:', error);
-      this.resetDatabase();
+    // If initialization is already in progress, return that promise
+    if (this.initializePromise) {
+      return this.initializePromise;
     }
+    
+    // If database is already initialized, just return a resolved promise
+    if (this.isInitialized && this.db && this.db.isOpen()) {
+      return Promise.resolve(this.db);
+    }
+    
+    console.log('DatabaseService: Initializing database...');
+    
+    this.initializePromise = new Promise((resolve, reject) => {
+      try {
+        // Use the globally available Dexie from the script tag
+        if (typeof Dexie === 'undefined') {
+          console.error('DatabaseService: Dexie is not defined. Make sure the Dexie.js script is loaded.');
+          reject(new Error('Dexie is not defined'));
+          return;
+        }
+        
+        // Close any existing instance properly
+        if (this.db) {
+          try {
+            if (this.db.isOpen()) {
+              this.db.close();
+            }
+          } catch (closeError) {
+            console.warn('DatabaseService: Error closing previous database instance:', closeError);
+          }
+          this.db = null;
+        }
+        
+        // Create new Dexie instance
+        this.db = new Dexie(this.dbName);
+        
+        // Define database schema (version 6)
+        this.db.version(6).stores({
+          curators: '++id, name, lastActive, serverId, origin',
+          concepts: '++id, category, value, timestamp, [category+value]',
+          restaurants: '++id, name, curatorId, timestamp, transcription, description, origin, source, serverId',
+          restaurantConcepts: '++id, restaurantId, conceptId',
+          restaurantPhotos: '++id, restaurantId, photoData',
+          restaurantLocations: '++id, restaurantId, latitude, longitude, address',
+          settings: 'key'
+        });
+
+        // Open the database to ensure proper initialization
+        this.db.open().then(() => {
+          console.log('DatabaseService: Database initialized successfully');
+          this.isInitialized = true;
+          this.initializePromise = null;
+          resolve(this.db);
+        }).catch(error => {
+          console.error('DatabaseService: Failed to open database:', error);
+          
+          // Reset if schema error or corruption detected
+          if (error.name === 'VersionError' || 
+              error.name === 'InvalidStateError' || 
+              error.name === 'NotFoundError') {
+            console.warn('DatabaseService: Database schema issue detected, attempting reset...');
+            this.resetDatabase()
+              .then(() => resolve(this.db))
+              .catch(resetError => reject(resetError));
+          } else {
+            reject(error);
+          }
+        });
+      } catch (error) {
+        console.error('DatabaseService: Error initializing database:', error);
+        this.initializePromise = null;
+        
+        this.resetDatabase()
+          .then(() => resolve(this.db))
+          .catch(resetError => reject(resetError));
+      }
+    });
+    
+    return this.initializePromise;
   }
 
   /**
@@ -68,11 +109,22 @@ class DatabaseService {
   async resetDatabase() {
     console.warn('DatabaseService: Resetting database...');
     try {
+      if (this.isResetting) {
+        // If reset is already in progress, wait a bit and return
+        return new Promise(resolve => setTimeout(() => resolve(true), 500));
+      }
+      
       this.isResetting = true;
       
       // Close current connection if exists
       if (this.db) {
-        this.db.close();
+        try {
+          if (this.db.isOpen()) {
+            this.db.close();
+          }
+        } catch (closeError) {
+          console.warn('DatabaseService: Error closing database during reset:', closeError);
+        }
         this.db = null;
       }
       
@@ -98,6 +150,7 @@ class DatabaseService {
       console.log('DatabaseService: Database reset and reinitialized successfully');
       
       this.isResetting = false;
+      this.isInitialized = true;
       return true;
     } catch (error) {
       this.isResetting = false;
@@ -129,9 +182,21 @@ class DatabaseService {
    */
   getDatabase() {
     if (!this.db || !this.db.isOpen()) {
-      this.initializeDatabase();
+      // Don't create a new instance immediately, return a promise that resolves to the db
+      return this.initializeDatabase().then(() => this.db);
     }
     return this.db;
+  }
+  
+  /**
+   * Make sure database is initialized and ready for use
+   * @returns {Promise<Dexie>} Promise resolving to database instance
+   */
+  async ensureDatabase() {
+    if (this.isInitialized && this.db && this.db.isOpen()) {
+      return this.db;
+    }
+    return this.initializeDatabase();
   }
 }
 

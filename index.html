@@ -1,0 +1,697 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Culinary Canvas | Restaurant Metadata Editor</title>
+    
+    <!-- Favicon -->
+    <link rel="icon" href="src/assets/favicon.svg" type="image/svg+xml">
+    
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Playfair+Display:wght@500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Styles -->
+    <link rel="stylesheet" href="src/styles/main.css">
+    
+    <!-- Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Third-party libraries -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dexie@3.2.2/dist/dexie.min.js"></script>
+</head>
+<body>
+    <!-- App Shell -->
+    <div class="app">
+        <!-- Sidebar Navigation -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="logo">
+                    <img src="src/assets/logo.svg" alt="Culinary Canvas Logo">
+                    <h1>Culinary Canvas</h1>
+                </div>
+                <button id="sidebarToggle" class="sidebar-toggle" aria-label="Toggle Sidebar">
+                    <i class="fas fa-bars"></i>
+                </button>
+            </div>
+            
+            <div class="curator-selector">
+                <div class="curator-info">
+                    <div class="avatar">
+                        <i class="fas fa-user"></i>
+                    </div>
+                    <div class="curator-details">
+                        <span class="curator-label">Current Curator</span>
+                        <span class="curator-name" id="currentCuratorName">Loading...</span>
+                    </div>
+                </div>
+                <button id="changeCuratorBtn" class="btn-icon" aria-label="Change Curator">
+                    <i class="fas fa-exchange-alt"></i>
+                </button>
+            </div>
+            
+            <nav class="main-nav">
+                <ul>
+                    <li>
+                        <a href="#restaurants" class="nav-item active" data-view="restaurants">
+                            <i class="fas fa-utensils"></i>
+                            <span>Restaurants</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="#concepts" class="nav-item" data-view="concepts">
+                            <i class="fas fa-tags"></i>
+                            <span>Concepts</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="#curators" class="nav-item" data-view="curators">
+                            <i class="fas fa-users"></i>
+                            <span>Curators</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="#analytics" class="nav-item" data-view="analytics">
+                            <i class="fas fa-chart-pie"></i>
+                            <span>Analytics</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="#settings" class="nav-item" data-view="settings">
+                            <i class="fas fa-cog"></i>
+                            <span>Settings</span>
+                        </a>
+                    </li>
+                </ul>
+            </nav>
+            
+            <div class="sidebar-footer">
+                <div class="sync-status">
+                    <span id="syncStatus">Last sync: Never</span>
+                </div>
+                <button id="syncNowBtn" class="btn btn-secondary btn-sm">
+                    <i class="fas fa-sync-alt"></i>
+                    Sync Now
+                </button>
+            </div>
+        </aside>
+        
+        <!-- Main Content Area -->
+        <main class="main-content">
+            <!-- Header Bar -->
+            <header class="top-bar">
+                <div class="breadcrumb" id="breadcrumb">
+                    <span>Restaurants</span>
+                </div>
+                
+                <div class="header-actions">
+                    <div class="search-container">
+                        <input type="text" id="searchInput" class="search-input" placeholder="Search restaurants...">
+                        <i class="fas fa-search search-icon"></i>
+                    </div>
+                    
+                    <button id="addNewBtn" class="btn btn-primary">
+                        <i class="fas fa-plus"></i>
+                        <span>Add New</span>
+                    </button>
+                </div>
+            </header>
+            
+            <!-- Content Views - Only one is visible at a time -->
+            <div id="contentViews" class="content-views">
+                <!-- Restaurants View -->
+                <section id="restaurantsView" class="content-view active">
+                    <!-- Filter Bar -->
+                    <div class="filter-bar">
+                        <div class="filter-controls">
+                            <div class="filter-item">
+                                <label for="filterCurator">Curator</label>
+                                <select id="filterCurator" class="select-input">
+                                    <option value="all">All Curators</option>
+                                </select>
+                            </div>
+                            <div class="filter-item">
+                                <label for="filterConcepts">Concept</label>
+                                <select id="filterConcepts" class="select-input">
+                                    <option value="all">All Concepts</option>
+                                </select>
+                            </div>
+                            <div class="filter-item">
+                                <label for="filterSource">Source</label>
+                                <select id="filterSource" class="select-input">
+                                    <option value="all">All Sources</option>
+                                    <option value="local">Local Only</option>
+                                    <option value="remote">Remote Only</option>
+                                    <option value="unsynced">Unsynced</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="view-controls">
+                            <button id="viewModeGrid" class="btn-icon view-mode active" aria-label="Grid View">
+                                <i class="fas fa-th-large"></i>
+                            </button>
+                            <button id="viewModeList" class="btn-icon view-mode" aria-label="List View">
+                                <i class="fas fa-list"></i>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- Restaurants Grid -->
+                    <div id="restaurantsContainer" class="restaurants-container grid-view">
+                        <div class="loader">
+                            <div class="spinner"></div>
+                            <span>Loading restaurants...</span>
+                        </div>
+                    </div>
+                    
+                    <!-- Empty State -->
+                    <div id="emptyState" class="empty-state hidden">
+                        <img src="src/assets/empty-state.svg" alt="No restaurants found" class="empty-image">
+                        <h3>No restaurants found</h3>
+                        <p>Try adjusting your filters or add a new restaurant.</p>
+                        <button class="btn btn-primary">
+                            <i class="fas fa-plus"></i>
+                            Add Restaurant
+                        </button>
+                    </div>
+                </section>
+                
+                <!-- Restaurant Detail View (hidden initially) -->
+                <section id="restaurantDetailView" class="content-view">
+                    <div class="restaurant-editor">
+                        <div class="editor-header">
+                            <button id="backToList" class="btn-icon" aria-label="Back to List">
+                                <i class="fas fa-arrow-left"></i>
+                            </button>
+                            <div class="editor-title">
+                                <div class="input-group full-width">
+                                    <input type="text" id="restaurantName" class="title-input" placeholder="Restaurant Name" required>
+                                </div>
+                            </div>
+                            <div class="editor-actions">
+                                <button id="deleteRestaurantBtn" class="btn btn-danger">
+                                    <i class="fas fa-trash"></i>
+                                    Delete
+                                </button>
+                                <button id="saveRestaurantBtn" class="btn btn-primary">
+                                    <i class="fas fa-save"></i>
+                                    Save
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div class="editor-content">
+                            <div class="editor-main">
+                                <div class="editor-section">
+                                    <h3 class="section-title">Details</h3>
+                                    <div class="form-group">
+                                        <label for="restaurantDescription">Description</label>
+                                        <textarea id="restaurantDescription" class="textarea-input" placeholder="Add a description..."></textarea>
+                                    </div>
+                                    
+                                    <div class="form-group">
+                                        <label for="restaurantTranscription">Transcription</label>
+                                        <textarea id="restaurantTranscription" class="textarea-input" placeholder="Add transcribed content..."></textarea>
+                                    </div>
+                                    
+                                    <div class="form-group">
+                                        <label for="restaurantCurator">Curator</label>
+                                        <select id="restaurantCurator" class="select-input">
+                                            <option value="">Select a curator</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                
+                                <div class="editor-section">
+                                    <h3 class="section-title">Location</h3>
+                                    <div class="form-row">
+                                        <div class="form-group half">
+                                            <label for="restaurantLatitude">Latitude</label>
+                                            <input type="number" id="restaurantLatitude" class="text-input" step="0.000001" placeholder="Latitude">
+                                        </div>
+                                        <div class="form-group half">
+                                            <label for="restaurantLongitude">Longitude</label>
+                                            <input type="number" id="restaurantLongitude" class="text-input" step="0.000001" placeholder="Longitude">
+                                        </div>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="restaurantAddress">Address</label>
+                                        <input type="text" id="restaurantAddress" class="text-input" placeholder="Address">
+                                    </div>
+                                    <div id="locationMap" class="location-map">
+                                        <div class="map-placeholder">
+                                            <i class="fas fa-map-marker-alt"></i>
+                                            <span>Map will display here</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="editor-sidebar">
+                                <div class="editor-section">
+                                    <h3 class="section-title">Photos</h3>
+                                    <div id="photoGallery" class="photo-gallery">
+                                        <div class="photo-upload-zone">
+                                            <input type="file" id="photoUpload" accept="image/*" multiple class="file-input">
+                                            <div class="upload-placeholder">
+                                                <i class="fas fa-cloud-upload-alt"></i>
+                                                <span>Drag photos here or click to upload</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="editor-section">
+                                    <div class="section-header">
+                                        <h3 class="section-title">Concepts</h3>
+                                        <button id="addConceptBtn" class="btn-icon" aria-label="Add Concept">
+                                            <i class="fas fa-plus"></i>
+                                        </button>
+                                    </div>
+                                    <div id="conceptTags" class="concept-tags">
+                                        <!-- Concepts will be populated here -->
+                                    </div>
+                                </div>
+                                
+                                <div class="editor-section">
+                                    <h3 class="section-title">Metadata</h3>
+                                    <table class="metadata-table">
+                                        <tr>
+                                            <th>Created</th>
+                                            <td id="metaCreated">-</td>
+                                        </tr>
+                                        <tr>
+                                            <th>Last Updated</th>
+                                            <td id="metaUpdated">-</td>
+                                        </tr>
+                                        <tr>
+                                            <th>Source</th>
+                                            <td id="metaSource">Local</td>
+                                        </tr>
+                                        <tr>
+                                            <th>Server ID</th>
+                                            <td id="metaServerId">Not synced</td>
+                                        </tr>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+                
+                <!-- Concepts View -->
+                <section id="conceptsView" class="content-view">
+                    <div class="concepts-manager">
+                        <div class="concepts-header">
+                            <h2>Manage Concepts</h2>
+                            <button id="addCategoryBtn" class="btn btn-primary">
+                                <i class="fas fa-plus"></i>
+                                Add Category
+                            </button>
+                        </div>
+                        
+                        <div class="concepts-grid" id="conceptsGrid">
+                            <div class="loader">
+                                <div class="spinner"></div>
+                                <span>Loading concepts...</span>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+                
+                <!-- Curators View -->
+                <section id="curatorsView" class="content-view">
+                    <div class="curators-manager">
+                        <div class="curators-header">
+                            <h2>Manage Curators</h2>
+                            <button id="addCuratorBtn" class="btn btn-primary">
+                                <i class="fas fa-plus"></i>
+                                Add Curator
+                            </button>
+                        </div>
+                        
+                        <div class="curators-list" id="curatorsList">
+                            <div class="loader">
+                                <div class="spinner"></div>
+                                <span>Loading curators...</span>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+                
+                <!-- Analytics View -->
+                <section id="analyticsView" class="content-view">
+                    <div class="analytics-dashboard">
+                        <div class="dashboard-header">
+                            <h2>Restaurant Analytics</h2>
+                            <div class="date-range">
+                                <button class="btn btn-subtle active">All Time</button>
+                                <button class="btn btn-subtle">This Month</button>
+                                <button class="btn btn-subtle">This Week</button>
+                            </div>
+                        </div>
+                        
+                        <div class="stats-cards">
+                            <div class="stat-card">
+                                <div class="stat-icon">
+                                    <i class="fas fa-utensils"></i>
+                                </div>
+                                <div class="stat-content">
+                                    <div class="stat-value" id="statTotalRestaurants">0</div>
+                                    <div class="stat-label">Total Restaurants</div>
+                                </div>
+                            </div>
+                            
+                            <div class="stat-card">
+                                <div class="stat-icon">
+                                    <i class="fas fa-tags"></i>
+                                </div>
+                                <div class="stat-content">
+                                    <div class="stat-value" id="statTotalConcepts">0</div>
+                                    <div class="stat-label">Total Concepts</div>
+                                </div>
+                            </div>
+                            
+                            <div class="stat-card">
+                                <div class="stat-icon">
+                                    <i class="fas fa-users"></i>
+                                </div>
+                                <div class="stat-content">
+                                    <div class="stat-value" id="statTotalCurators">0</div>
+                                    <div class="stat-label">Active Curators</div>
+                                </div>
+                            </div>
+                            
+                            <div class="stat-card">
+                                <div class="stat-icon">
+                                    <i class="fas fa-cloud-upload-alt"></i>
+                                </div>
+                                <div class="stat-content">
+                                    <div class="stat-value" id="statUnsyncedCount">0</div>
+                                    <div class="stat-label">Unsynced Items</div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="chart-grid">
+                            <div class="chart-container">
+                                <h3>Restaurants by Cuisine</h3>
+                                <div class="chart-placeholder" id="cuisineChart">
+                                    <div class="placeholder-content">
+                                        <i class="fas fa-chart-pie"></i>
+                                        <span>Chart loading...</span>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="chart-container">
+                                <h3>Restaurants by Location</h3>
+                                <div class="chart-placeholder" id="locationChart">
+                                    <div class="placeholder-content">
+                                        <i class="fas fa-map-marked-alt"></i>
+                                        <span>Map loading...</span>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="chart-container">
+                                <h3>Monthly Additions</h3>
+                                <div class="chart-placeholder" id="timelineChart">
+                                    <div class="placeholder-content">
+                                        <i class="fas fa-chart-line"></i>
+                                        <span>Chart loading...</span>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="chart-container">
+                                <h3>Top Curators</h3>
+                                <div class="chart-placeholder" id="curatorChart">
+                                    <div class="placeholder-content">
+                                        <i class="fas fa-chart-bar"></i>
+                                        <span>Chart loading...</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+                
+                <!-- Settings View -->
+                <section id="settingsView" class="content-view">
+                    <div class="settings-manager">
+                        <div class="settings-header">
+                            <h2>Application Settings</h2>
+                            <button id="saveSettingsBtn" class="btn btn-primary">
+                                <i class="fas fa-save"></i>
+                                Save Changes
+                            </button>
+                        </div>
+                        
+                        <div class="settings-grid">
+                            <div class="settings-section">
+                                <h3>Synchronization</h3>
+                                
+                                <div class="form-group">
+                                    <label for="settingSyncInterval">Sync Interval (minutes)</label>
+                                    <input type="number" id="settingSyncInterval" class="text-input" min="5" value="30">
+                                </div>
+                                
+                                <div class="form-group">
+                                    <label class="checkbox-label">
+                                        <input type="checkbox" id="settingSyncStartup">
+                                        <span class="checkmark"></span>
+                                        Sync on startup
+                                    </label>
+                                </div>
+                                
+                                <div class="form-group">
+                                    <label for="syncServerUrl">Server URL</label>
+                                    <input type="url" id="syncServerUrl" class="text-input" placeholder="https://example.com/api">
+                                </div>
+                                
+                                <div class="sync-history">
+                                    <h4>Sync History</h4>
+                                    <div class="history-list" id="syncHistoryList">
+                                        <div class="history-item">
+                                            <span class="history-icon success">
+                                                <i class="fas fa-check-circle"></i>
+                                            </span>
+                                            <div class="history-details">
+                                                <span class="history-title">Sync completed</span>
+                                                <span class="history-time">Today, 10:45 AM</span>
+                                            </div>
+                                            <span class="history-meta">Added 5, Updated 2</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="settings-section">
+                                <h3>Display Preferences</h3>
+                                
+                                <div class="form-group">
+                                    <label>Theme</label>
+                                    <div class="theme-selector">
+                                        <button class="theme-option active" data-theme="light">
+                                            <div class="theme-preview light"></div>
+                                            <span>Light</span>
+                                        </button>
+                                        <button class="theme-option" data-theme="dark">
+                                            <div class="theme-preview dark"></div>
+                                            <span>Dark</span>
+                                        </button>
+                                        <button class="theme-option" data-theme="system">
+                                            <div class="theme-preview system"></div>
+                                            <span>System</span>
+                                        </button>
+                                    </div>
+                                </div>
+                                
+                                <div class="form-group">
+                                    <label for="settingDefaultView">Default View</label>
+                                    <select id="settingDefaultView" class="select-input">
+                                        <option value="grid">Grid</option>
+                                        <option value="list">List</option>
+                                    </select>
+                                </div>
+                                
+                                <div class="form-group">
+                                    <label for="settingItemsPerPage">Items per page</label>
+                                    <select id="settingItemsPerPage" class="select-input">
+                                        <option value="12">12</option>
+                                        <option value="24">24</option>
+                                        <option value="48">48</option>
+                                        <option value="96">96</option>
+                                    </select>
+                                </div>
+                            </div>
+                            
+                            <div class="settings-section">
+                                <h3>Data Management</h3>
+                                
+                                <div class="action-buttons">
+                                    <button id="exportDataBtn" class="btn btn-secondary">
+                                        <i class="fas fa-file-export"></i>
+                                        Export Data
+                                    </button>
+                                    <button id="importDataBtn" class="btn btn-secondary">
+                                        <i class="fas fa-file-import"></i>
+                                        Import Data
+                                    </button>
+                                    <button id="resetDbBtn" class="btn btn-danger">
+                                        <i class="fas fa-exclamation-triangle"></i>
+                                        Reset Database
+                                    </button>
+                                </div>
+                                
+                                <div class="database-info">
+                                    <h4>Database Information</h4>
+                                    <table class="metadata-table">
+                                        <tr>
+                                            <th>Database Name</th>
+                                            <td id="dbName">RestaurantCurator</td>
+                                        </tr>
+                                        <tr>
+                                            <th>Version</th>
+                                            <td id="dbVersion">6</td>
+                                        </tr>
+                                        <tr>
+                                            <th>Total Storage</th>
+                                            <td id="dbSize">Calculating...</td>
+                                        </tr>
+                                    </table>
+                                </div>
+                            </div>
+                            
+                            <div class="settings-section">
+                                <h3>About</h3>
+                                <div class="about-info">
+                                    <div class="app-branding">
+                                        <img src="src/assets/logo.svg" alt="Culinary Canvas Logo" class="about-logo">
+                                        <div class="app-info">
+                                            <h2>Culinary Canvas</h2>
+                                            <p>Restaurant Metadata Editor</p>
+                                            <span class="version">Version 1.0.0</span>
+                                        </div>
+                                    </div>
+                                    <p class="app-description">
+                                        A powerful tool for managing restaurant metadata, curators, and concepts.
+                                        Built with modern web technologies.
+                                    </p>
+                                    <div class="tech-stack">
+                                        <span class="tech-badge">HTML5</span>
+                                        <span class="tech-badge">CSS3</span>
+                                        <span class="tech-badge">JavaScript</span>
+                                        <span class="tech-badge">IndexedDB</span>
+                                        <span class="tech-badge">Dexie.js</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            </div>
+        </main>
+        
+        <!-- Modals -->
+        <div id="modalOverlay" class="modal-overlay hidden">
+            <!-- Add Concept Modal -->
+            <div id="addConceptModal" class="modal hidden">
+                <div class="modal-header">
+                    <h3>Add Concept</h3>
+                    <button class="modal-close" aria-label="Close Modal">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="conceptCategory">Category</label>
+                        <select id="conceptCategory" class="select-input">
+                            <option value="">Select a category</option>
+                            <option value="new">Add new category...</option>
+                        </select>
+                    </div>
+                    <div class="form-group hidden" id="newCategoryGroup">
+                        <label for="newCategoryName">New Category Name</label>
+                        <input type="text" id="newCategoryName" class="text-input" placeholder="Enter new category">
+                    </div>
+                    <div class="form-group">
+                        <label for="conceptValue">Value</label>
+                        <input type="text" id="conceptValue" class="text-input" placeholder="Enter concept value">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-subtle modal-cancel">Cancel</button>
+                    <button id="saveConceptBtn" class="btn btn-primary">Save</button>
+                </div>
+            </div>
+            
+            <!-- Add Curator Modal -->
+            <div id="addCuratorModal" class="modal hidden">
+                <div class="modal-header">
+                    <h3>Add Curator</h3>
+                    <button class="modal-close" aria-label="Close Modal">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="curatorName">Name</label>
+                        <input type="text" id="curatorName" class="text-input" placeholder="Enter curator name">
+                    </div>
+                    <div class="form-group">
+                        <label for="curatorApiKey">OpenAI API Key (optional)</label>
+                        <input type="text" id="curatorApiKey" class="text-input" placeholder="For AI-assisted curation">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-subtle modal-cancel">Cancel</button>
+                    <button id="saveCuratorBtn" class="btn btn-primary">Save</button>
+                </div>
+            </div>
+            
+            <!-- Confirm Delete Modal -->
+            <div id="confirmDeleteModal" class="modal hidden">
+                <div class="modal-header">
+                    <h3>Confirm Deletion</h3>
+                    <button class="modal-close" aria-label="Close Modal">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <div class="warning-message">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <p>Are you sure you want to delete <span id="deleteItemName"></span>? This action cannot be undone.</p>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-subtle modal-cancel">Cancel</button>
+                    <button id="confirmDeleteBtn" class="btn btn-danger">Delete</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Module wrapper utility - Load this first -->
+    <script src="src/utils/ModuleWrapper.js" type="module"></script>
+    
+    <!-- Database Services - Load these in order -->
+    <script src="src/services/db/DatabaseService.js" type="module"></script>
+    <script src="src/services/SettingsService.js" type="module"></script>
+    <script src="src/services/SyncService.js" type="module"></script>
+    <script src="src/services/AutoSyncService.js" type="module"></script>
+    
+    <!-- Repositories -->
+    <script src="src/repositories/RestaurantRepository.js" type="module"></script>
+    <script src="src/repositories/CuratorRepository.js" type="module"></script>
+    
+    <!-- Application Scripts -->
+    <script src="src/services/index.js" type="module"></script>
+    <script src="src/scripts/app.js" type="module"></script>
+</body>
+</html>
